@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>点·火柴人 · 肉鸽最终版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #0b0e14;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: manipulation;
+        }
+
+        .game-wrapper {
+            width: 100%;
+            max-width: 1200px;
+            padding: 10px;
+        }
+
+        .game-container {
+            background: #1a1f2b;
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.7);
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            padding-top: 60%;
+            background: #10131f;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 2px solid #4e3b2e;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .info-panel {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-top: 16px;
+            color: #cbad8e;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-shadow: 2px 2px 0 #2d241c;
+            background: #262d3a;
+            padding: 12px 16px;
+            border-radius: 60px;
+            border: 2px solid #6b4f3a;
+            gap: 8px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .badge {
+            background: #3f2f23;
+            padding: 4px 12px;
+            border-radius: 40px;
+            color: #fadf9e;
+            border: 1px solid #aa8b6e;
+            min-width: 80px;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        button {
+            background: #6d4f3a;
+            border: none;
+            color: #faeac6;
+            font-weight: bold;
+            font-size: 1.1rem;
+            padding: 8px 16px;
+            border-radius: 50px;
+            cursor: pointer;
+            border-bottom: 4px solid #3a2c1e;
+            font-family: inherit;
+            transition: 0.08s linear;
+            touch-action: manipulation;
+        }
+
+            button:active {
+                border-bottom-width: 2px;
+                transform: translateY(2px);
+            }
+
+        .tips {
+            color: #7e8a9a;
+            margin-top: 12px;
+            padding-left: 12px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .key-hint {
+            background: #2a3140;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        #settingsPanel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1e2533;
+            border: 3px solid #aa8b6e;
+            border-radius: 30px;
+            padding: 25px;
+            color: #fadf9e;
+            z-index: 100;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px black;
+        }
+
+            #settingsPanel h3 {
+                text-align: center;
+                margin-bottom: 20px;
+                font-size: 1.8rem;
+            }
+
+        .key-setting {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            align-items: center;
+        }
+
+            .key-setting button {
+                background: #3f2f23;
+                border-bottom: 2px solid #1e1510;
+                padding: 8px 20px;
+                min-width: 80px;
+            }
+
+            .key-setting .key-display {
+                background: #10131f;
+                padding: 6px 16px;
+                border-radius: 30px;
+                border: 1px solid #6b4f3a;
+                font-size: 1.3rem;
+                min-width: 70px;
+                text-align: center;
+            }
+
+        #settingsClose {
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #fullscreenBtn {
+            background: #4a3f33;
+            border-bottom-color: #2d241c;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="game-container">
+            <div class="canvas-wrapper" id="canvasWrapper">
+                <canvas id="gameCanvas" width="1000" height="600"></canvas>
+            </div>
+            <div class="info-panel">
+                <div class="info-item">❤️ <span id="hpDisplay" class="badge">0/0</span></div>
+                <div class="info-item">⚡ LV <span id="levelDisplay" class="badge">1</span></div>
+                <div class="info-item">✨ EXP <span id="expDisplay" class="badge">0/100</span></div>
+                <div class="info-item">💀 <span id="killDisplay" class="badge">0</span></div>
+                <div class="info-item">💰 <span id="goldDisplay" class="badge">0</span></div>
+                <div class="info-item">⏱️ <span id="timeDisplay" class="badge">00:00:00</span></div>
+                <button id="restartBtn">↺ 重来</button>
+            </div>
+            <div class="tips">
+                <span class="key-hint" id="moveHint">WASD 移动</span>
+                <span class="key-hint" id="interactHint">E 开启宝箱</span>
+                <span class="key-hint" id="pauseHint">P 暂停</span>
+                <span class="key-hint" id="settingsHint">按 [F] 键设置</span>
+                <button id="fullscreenBtn">⛶ 全屏</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 按键设置面板 -->
+    <div id="settingsPanel">
+        <h3>⚙️ 按键设置</h3>
+        <div class="key-setting">
+            <span>向上移动</span>
+            <span class="key-display" id="key-up">W</span>
+            <button class="remap-btn" data-action="up">修改</button>
+        </div>
+        <div class="key-setting">
+            <span>向下移动</span>
+            <span class="key-display" id="key-down">S</span>
+            <button class="remap-btn" data-action="down">修改</button>
+        </div>
+        <div class="key-setting">
+            <span>向左移动</span>
+            <span class="key-display" id="key-left">A</span>
+            <button class="remap-btn" data-action="left">修改</button>
+        </div>
+        <div class="key-setting">
+            <span>向右移动</span>
+            <span class="key-display" id="key-right">D</span>
+            <button class="remap-btn" data-action="right">修改</button>
+        </div>
+        <div class="key-setting">
+            <span>互动 (宝箱)</span>
+            <span class="key-display" id="key-interact">E</span>
+            <button class="remap-btn" data-action="interact">修改</button>
+        </div>
+        <div class="key-setting">
+            <span>暂停</span>
+            <span class="key-display" id="key-pause">P</span>
+            <button class="remap-btn" data-action="pause">修改</button>
+        </div>
+        <button id="settingsClose">关闭</button>
+    </div>
+
+    <script>(function () {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const wrapper = document.getElementById('canvasWrapper');
+
+            // UI 元素
+            const hpSpan = document.getElementById('hpDisplay');
+            const levelSpan = document.getElementById('levelDisplay');
+            const expSpan = document.getElementById('expDisplay');
+            const killSpan = document.getElementById('killDisplay');
+            const goldSpan = document.getElementById('goldDisplay');
+            const timeSpan = document.getElementById('timeDisplay');
+            const restartBtn = document.getElementById('restartBtn');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const settingsPanel = document.getElementById('settingsPanel');
+            const settingsClose = document.getElementById('settingsClose');
+
+            // 游戏时间
+            let gameTime = 0; // 秒
+
+            // ---------- 按键映射 ----------
+            let keyMap = {
+                up: 'w',
+                down: 's',
+                left: 'a',
+                right: 'd',
+                interact: 'e',
+                pause: 'p'
+            };
+
+            // 更新UI提示
+            function updateKeyHints() {
+                document.getElementById('moveHint').innerText = `${keyMap.up.toUpperCase()} ${keyMap.left.toUpperCase()} ${keyMap.down.toUpperCase()} ${keyMap.right.toUpperCase()} 移动`;
+                document.getElementById('interactHint').innerText = `${keyMap.interact.toUpperCase()} 开启宝箱`;
+                document.getElementById('pauseHint').innerText = `${keyMap.pause.toUpperCase()} 暂停`;
+                document.getElementById('key-up').innerText = keyMap.up.toUpperCase();
+                document.getElementById('key-down').innerText = keyMap.down.toUpperCase();
+                document.getElementById('key-left').innerText = keyMap.left.toUpperCase();
+                document.getElementById('key-right').innerText = keyMap.right.toUpperCase();
+                document.getElementById('key-interact').innerText = keyMap.interact.toUpperCase();
+                document.getElementById('key-pause').innerText = keyMap.pause.toUpperCase();
+            }
+
+            // 等待新按键
+            let remapAction = null;
+            document.querySelectorAll('.remap-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    remapAction = e.target.dataset.action;
+                    e.target.innerText = '按任意键...';
+                    e.target.disabled = true;
+                    setTimeout(() => {
+                        if (remapAction) {
+                            e.target.innerText = '修改';
+                            e.target.disabled = false;
+                            remapAction = null;
+                        }
+                    }, 5000);
+                });
+            });
+
+            window.addEventListener('keydown', (e) => {
+                if (remapAction) {
+                    e.preventDefault();
+                    const key = e.key.toLowerCase();
+                    if (key.length === 1 || key === 'escape') {
+                        keyMap[remapAction] = key;
+                        updateKeyHints();
+                        document.querySelectorAll('.remap-btn').forEach(btn => {
+                            btn.innerText = '修改';
+                            btn.disabled = false;
+                        });
+                        remapAction = null;
+                        localStorage.setItem('keyMap', JSON.stringify(keyMap));
+                    }
+                }
+            });
+
+            // 加载保存的按键映射
+            const savedMap = localStorage.getItem('keyMap');
+            if (savedMap) {
+                try {
+                    const parsed = JSON.parse(savedMap);
+                    keyMap = { ...keyMap, ...parsed };
+                } catch (e) { }
+            }
+            updateKeyHints();
+
+            // 设置面板开关（按F打开/关闭）
+            document.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 'f') {
+                    if (settingsPanel.style.display === 'block') {
+                        settingsPanel.style.display = 'none';
+                        if (gameStateBeforeSettings !== undefined) {
+                            gameState = gameStateBeforeSettings;
+                            gameStateBeforeSettings = undefined;
+                        }
+                    } else {
+                        gameStateBeforeSettings = gameState;
+                        if (gameState !== STATE_PAUSED && gameState !== STATE_GAMEOVER) {
+                            gameState = STATE_PAUSED;
+                        }
+                        settingsPanel.style.display = 'block';
+                    }
+                    e.preventDefault();
+                }
+            });
+
+            settingsClose.addEventListener('click', () => {
+                settingsPanel.style.display = 'none';
+                if (gameStateBeforeSettings !== undefined) {
+                    gameState = gameStateBeforeSettings;
+                    gameStateBeforeSettings = undefined;
+                }
+            });
+
+            let gameStateBeforeSettings = undefined;
+
+            // 全屏功能
+            fullscreenBtn.addEventListener('click', () => {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    document.documentElement.requestFullscreen();
+                }
+            });
+
+            // 触摸适配
+            function handleTouchStart(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                if (!touch) return;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                mouseX = (touch.clientX - rect.left) * scaleX;
+                mouseY = (touch.clientY - rect.top) * scaleY;
+                mouseX = clamp(mouseX, 0, canvas.width);
+                mouseY = clamp(mouseY, 0, canvas.height);
+                touchTargetX = mouseX + worldOffsetX;
+                touchTargetY = mouseY + worldOffsetY;
+                touchActive = true;
+            }
+
+            function handleTouchMove(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                if (!touch) return;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                mouseX = (touch.clientX - rect.left) * scaleX;
+                mouseY = (touch.clientY - rect.top) * scaleY;
+                mouseX = clamp(mouseX, 0, canvas.width);
+                mouseY = clamp(mouseY, 0, canvas.height);
+                touchTargetX = mouseX + worldOffsetX;
+                touchTargetY = mouseY + worldOffsetY;
+            }
+
+            function handleTouchEnd(e) {
+                e.preventDefault();
+                touchActive = false;
+            }
+
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd);
+            canvas.addEventListener('touchcancel', handleTouchEnd);
+
+            // 触摸移动目标
+            let touchActive = false;
+            let touchTargetX = 0, touchTargetY = 0;
+
+            // ---------- 游戏配置 ----------
+            const W = 1000, H = 600;
+            let worldOffsetX = 0, worldOffsetY = 0;
+
+            // 初始玩家属性
+            const PLAYER_RADIUS = 12;
+            const BASE_SPEED = 220;
+            const BASE_MAX_HP = 20;
+            const BASE_DAMAGE = 2.0;
+            const BASE_FIRE_INTERVAL = 0.28;
+            const BASE_BULLET_SPEED = 480;
+            const BASE_BULLET_COUNT = 1;
+            const BASE_CRIT_CHANCE = 0.05;
+            const BASE_CRIT_DAMAGE = 1.5;
+            const BASE_PIERCING = 0;
+            const BULLET_SIZE = 5;
+            const BASE_DODGE = 0.0;
+            const INVINCIBLE_DURATION = 0.7;
+
+            // 递减参数
+            const DODGE_DIMINISH_FACTOR = 0.6;
+            const SPEED_DIMINISH_FACTOR = 0.4;
+
+            // 经验/升级
+            const BASE_EXP_NEXT = 100;
+            const EXP_INCREASE_PER_LEVEL = 70;
+
+            // 游戏状态
+            const STATE_PLAYING = 'playing';
+            const STATE_UPGRADE = 'upgrade';
+            const STATE_SHOP = 'shop';
+            const STATE_GAMEOVER = 'gameover';
+            const STATE_PAUSED = 'paused';
+            let gameState = STATE_PLAYING;
+
+            // 鼠标坐标
+            let mouseX = W / 2, mouseY = H / 2;
+            const keys = {};
+
+            // 游戏数据
+            let player = {
+                x: 0, y: 0,
+                hp: 20,
+                maxHp: 20,
+                speed: BASE_SPEED,
+                speedBonus: 0,
+                level: 1,
+                exp: 0,
+                nextExp: BASE_EXP_NEXT,
+                damage: BASE_DAMAGE,
+                fireInterval: BASE_FIRE_INTERVAL,
+                bulletSpeed: BASE_BULLET_SPEED,
+                bulletCount: BASE_BULLET_COUNT,
+                critChance: BASE_CRIT_CHANCE,
+                critDamage: BASE_CRIT_DAMAGE,
+                piercing: BASE_PIERCING,
+                bulletSize: BULLET_SIZE,
+                dodge: 0,
+                invincibleTimer: 0,
+                radius: PLAYER_RADIUS,
+                gold: 0,
+            };
+
+            // 动态实体
+            let enemies = [];
+            let elites = [];
+            let bullets = [];
+            let xpOrbs = [];
+            let chests = [];
+            let bosses = [];
+            let floatingTexts = [];
+
+            let lastShotTime = 0;
+            let lastSpawnTime = 0;
+            let killCount = 0;
+            let eliteKillCount = 0;
+            let bossKillCount = 0;
+
+            let upgradeOptions = [];
+            let nearbyChest = null;
+            let shopItems = [null, null, null];
+            let shopRefreshCount = 0; // 当前商店刷新次数（用于递增费用）
+
+            let lastTimestamp = 0;
+            let gameLoop = null;
+
+            // 生成参数
+            let spawnRate = 0.9;
+            let difficultyTimer = 0;
+            let lastChestSpawnTime = 0;
+            const CHEST_SPAWN_INTERVAL = 30;
+
+            // Boss 预生成相关
+            let bossCountdown = 0;
+            let bossCountdownReason = '';
+            let lastBossSpawnTime = 0;
+            let lastBossLevel = 0;
+            const BOSS_SPAWN_INTERVAL = 180;
+            const BOSS_COUNTDOWN_TIME = 5;
+
+            // 精英怪参数
+            let lastEliteSpawnTime = 0;
+            const ELITE_SPAWN_INTERVAL = 30;
+
+            // ---------- 辅助函数 ----------
+            function clamp(value, min, max) {
+                return Math.min(max, Math.max(min, value));
+            }
+
+            function diminishingReturn(level, factor) {
+                return 1 - 1 / (1 + factor * level);
+            }
+
+            function getFinalDodge() {
+                return diminishingReturn(player.dodge, DODGE_DIMINISH_FACTOR);
+            }
+
+            function getFinalSpeed() {
+                let bonusPercent = diminishingReturn(player.speedBonus, SPEED_DIMINISH_FACTOR);
+                return BASE_SPEED * (1 + bonusPercent);
+            }
+
+            function resetGame() {
+                gameState = STATE_PLAYING;
+                player = {
+                    x: 0, y: 0,
+                    hp: BASE_MAX_HP,
+                    maxHp: BASE_MAX_HP,
+                    speed: BASE_SPEED,
+                    speedBonus: 0,
+                    level: 1,
+                    exp: 0,
+                    nextExp: BASE_EXP_NEXT,
+                    damage: BASE_DAMAGE,
+                    fireInterval: BASE_FIRE_INTERVAL,
+                    bulletSpeed: BASE_BULLET_SPEED,
+                    bulletCount: BASE_BULLET_COUNT,
+                    critChance: BASE_CRIT_CHANCE,
+                    critDamage: BASE_CRIT_DAMAGE,
+                    piercing: BASE_PIERCING,
+                    bulletSize: BULLET_SIZE,
+                    dodge: 0,
+                    invincibleTimer: 0,
+                    radius: PLAYER_RADIUS,
+                    gold: 0,
+                };
+                enemies = [];
+                elites = [];
+                bullets = [];
+                xpOrbs = [];
+                chests = [];
+                bosses = [];
+                floatingTexts = [];
+                killCount = 0;
+                eliteKillCount = 0;
+                bossKillCount = 0;
+                lastShotTime = 0;
+                lastSpawnTime = 0;
+                lastChestSpawnTime = 0;
+                lastBossSpawnTime = 0;
+                lastBossLevel = 0;
+                lastEliteSpawnTime = 0;
+                difficultyTimer = 0;
+                gameTime = 0;
+                bossCountdown = 0;
+                spawnRate = 0.9;
+                upgradeOptions = [];
+                nearbyChest = null;
+                shopItems = [null, null, null];
+                shopRefreshCount = 0;
+                worldOffsetX = 0;
+                worldOffsetY = 0;
+                touchActive = false;
+                updateUI();
+            }
+
+            function updateUI() {
+                hpSpan.textContent = `${Math.max(0, player.hp)}/${player.maxHp}`;
+                levelSpan.textContent = player.level;
+                let next = player.nextExp;
+                expSpan.textContent = `${Math.floor(player.exp)}/${next}`;
+                killSpan.textContent = killCount;
+                goldSpan.textContent = player.gold;
+
+                // 格式化时间 hh:mm:ss
+                let hours = Math.floor(gameTime / 3600);
+                let minutes = Math.floor((gameTime % 3600) / 60);
+                let seconds = Math.floor(gameTime % 60);
+                timeSpan.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            function addFloatingText(text, x, y, color = "#ffd966") {
+                floatingTexts.push({
+                    text: text,
+                    x: x,
+                    y: y,
+                    life: 1.0,
+                    color: color
+                });
+            }
+
+            // 根据玩家等级调整小怪强度
+            function getMonsterStatsByLevel() {
+                let levelFactor = 1 + player.level * 0.12;
+                return {
+                    healthMult: levelFactor,
+                    speedMult: Math.min(2.2, 1 + player.level * 0.08),
+                };
+            }
+
+            // 生成普通怪
+            function spawnEnemy(now) {
+                let baseDelay = Math.max(0.15, 0.9 - player.level * 0.02);
+                if (now - lastSpawnTime < baseDelay) return;
+                lastSpawnTime = now;
+
+                let stats = getMonsterStatsByLevel();
+                let sizeVariation = Math.random() * 0.8 + 0.5;
+                let baseRadius = 5 + Math.floor(difficultyTimer * 0.15);
+                let radius = clamp(baseRadius * sizeVariation, 4, 22);
+                let health = Math.max(1, Math.floor(radius / 3.2) * stats.healthMult + (player.level * 0.3));
+                let speed = (18 + Math.random() * 35) * stats.speedMult;
+
+                let angle = Math.random() * Math.PI * 2;
+                let distance = 450 + Math.random() * 300;
+                let x = player.x + Math.cos(angle) * distance;
+                let y = player.y + Math.sin(angle) * distance;
+
+                enemies.push({
+                    x, y,
+                    radius: radius,
+                    health: health,
+                    maxHealth: health,
+                    speed: speed,
+                    isBoss: false,
+                    isElite: false
+                });
+            }
+
+            // 生成精英怪
+            function spawnElite(now) {
+                if (killCount >= 30 * (eliteKillCount + 1)) {
+                    eliteKillCount++;
+                    let eliteCount = 1 + Math.floor(player.level / 3);
+                    for (let i = 0; i < eliteCount; i++) {
+                        let radius = 18 + Math.random() * 8;
+                        let health = 15 + player.level * 5 + Math.floor(difficultyTimer);
+                        let speed = 35 + player.level * 1.5;
+                        let angle = Math.random() * Math.PI * 2;
+                        let distance = 400 + Math.random() * 200;
+                        let x = player.x + Math.cos(angle) * distance;
+                        let y = player.y + Math.sin(angle) * distance;
+                        elites.push({
+                            x, y,
+                            radius: radius,
+                            health: health,
+                            maxHealth: health,
+                            speed: speed,
+                            isElite: true,
+                            isBoss: false
+                        });
+                    }
+                    addFloatingText(`⚡ 精英出现 x${eliteCount}`, player.x, player.y - 60, "#ffaa55");
+                }
+            }
+
+            // 检查并触发Boss倒计时
+            function checkBossCountdown(now) {
+                if (bossCountdown > 0) return;
+
+                // 条件1: 等级为5的倍数且不等于上次生成Boss的等级
+                if (player.level >= 5 && player.level % 5 === 0 && player.level !== lastBossLevel) {
+                    bossCountdown = BOSS_COUNTDOWN_TIME;
+                    bossCountdownReason = '等级达到' + player.level + '级';
+                    addFloatingText(`⚠️ Boss 即将在 ${BOSS_COUNTDOWN_TIME} 秒后出现 (${bossCountdownReason})`, player.x, player.y - 80, "#ff5555");
+                    return;
+                }
+
+                // 条件2: 时间间隔达到 3分钟 - 5秒，且上次生成Boss的时间距离现在足够
+                let timeSinceLastBoss = now - lastBossSpawnTime;
+                if (timeSinceLastBoss >= BOSS_SPAWN_INTERVAL - BOSS_COUNTDOWN_TIME && lastBossSpawnTime > 0 && bossCountdown === 0) {
+                    bossCountdown = BOSS_COUNTDOWN_TIME;
+                    bossCountdownReason = '时间到达';
+                    addFloatingText(`⚠️ Boss 即将在 ${BOSS_COUNTDOWN_TIME} 秒后出现 (时间条件)`, player.x, player.y - 80, "#ff5555");
+                }
+            }
+
+            // 实际生成Boss
+            function spawnBoss(now) {
+                let radius = 35 + Math.random() * 15;
+                let health = 80 + player.level * 30 + Math.floor(difficultyTimer * 2);
+                let speed = 30 + player.level * 1.5;
+
+                let angle = Math.random() * Math.PI * 2;
+                let distance = 500;
+                let x = player.x + Math.cos(angle) * distance;
+                let y = player.y + Math.sin(angle) * distance;
+
+                bosses.push({
+                    x, y,
+                    radius: radius,
+                    health: health,
+                    maxHealth: health,
+                    speed: speed,
+                    isBoss: true,
+                    attackTimer: 0,
+                    attackInterval: 1.5,
+                });
+
+                addFloatingText("👾 BOSS 出现！", x, y - 50, "#ff5555");
+
+                lastBossSpawnTime = now;
+                lastBossLevel = player.level;
+            }
+
+            // Boss攻击
+            function bossShoot(boss, now) {
+                let dx = player.x - boss.x;
+                let dy = player.y - boss.y;
+                let len = Math.hypot(dx, dy);
+                if (len < 0.1) return;
+                let vx = dx / len * 200;
+                let vy = dy / len * 200;
+                bullets.push({
+                    x: boss.x,
+                    y: boss.y,
+                    vx: vx,
+                    vy: vy,
+                    radius: 8,
+                    damage: 3,
+                    piercing: 0,
+                    hitEnemies: new Set(),
+                    isCrit: false,
+                    life: 4.0,
+                    fromBoss: true,
+                });
+            }
+
+            // 敌人死亡掉落
+            function spawnXpFromEnemy(ex, ey, enemyRadius, isBoss = false, isElite = false) {
+                let value = Math.floor(enemyRadius / 2) + 2 + Math.floor(player.level * 0.8);
+                if (isBoss) value *= 5;
+                if (isElite) value *= 2;
+                xpOrbs.push({
+                    x: ex, y: ey,
+                    radius: isBoss ? 12 : (isElite ? 8 : 4 + value * 0.5),
+                    value: value,
+                });
+                if (isBoss) {
+                    let goldDrop = 30 + player.level * 10;
+                    player.gold += goldDrop;
+                    addFloatingText(`+${goldDrop}💰`, ex, ey - 30, "#ffd966");
+                }
+                if (isElite) {
+                    let goldDrop = 5 + player.level * 2;
+                    player.gold += goldDrop;
+                    addFloatingText(`+${goldDrop}💰`, ex, ey - 30, "#ffd966");
+                }
+            }
+
+            // 生成宝箱
+            function spawnChest(now) {
+                if (now - lastChestSpawnTime < CHEST_SPAWN_INTERVAL) return;
+                lastChestSpawnTime = now;
+
+                let angle = Math.random() * Math.PI * 2;
+                let distance = 300 + Math.random() * 400;
+                let x = player.x + Math.cos(angle) * distance;
+                let y = player.y + Math.sin(angle) * distance;
+
+                chests.push({
+                    x, y,
+                    radius: 18,
+                    isOpen: false,
+                });
+            }
+
+            // 开启宝箱
+            function openChest(chestIndex) {
+                if (chestIndex < 0 || chestIndex >= chests.length) return;
+                let chest = chests[chestIndex];
+                if (chest.isOpen) return;
+                chest.isOpen = true;
+
+                const items = [
+                    {
+                        name: '❤️ 回血30%', effect: () => {
+                            let heal = Math.floor(player.maxHp * 0.3);
+                            player.hp = Math.min(player.maxHp, player.hp + heal);
+                            addFloatingText(`+${heal} HP`, player.x, player.y - 30, "#ff8888");
+                        }
+                    },
+                    {
+                        name: '💪 攻击力+1', effect: () => {
+                            player.damage += 1;
+                            addFloatingText("攻击+1", player.x, player.y - 30, "#ffaa66");
+                        }
+                    },
+                    {
+                        name: '🏹 子弹数量+1', effect: () => {
+                            player.bulletCount = Math.min(10, player.bulletCount + 1);
+                            addFloatingText("子弹+1", player.x, player.y - 30, "#66ccff");
+                        }
+                    },
+                    {
+                        name: '⚡ 攻速提升', effect: () => {
+                            player.fireInterval = Math.max(0.08, player.fireInterval - 0.03);
+                            addFloatingText("攻速提升", player.x, player.y - 30, "#aadd66");
+                        }
+                    },
+                    {
+                        name: '🔫 子弹大小+2', effect: () => {
+                            player.bulletSize += 2;
+                            addFloatingText("子弹大小+2", player.x, player.y - 30, "#ffaa88");
+                        }
+                    },
+                    {
+                        name: '💥 暴击率+3%', effect: () => {
+                            player.critChance = Math.min(0.8, player.critChance + 0.03);
+                            addFloatingText("暴击+3%", player.x, player.y - 30, "#ffdd44");
+                        }
+                    },
+                    {
+                        name: '🗡️ 暴击伤害+20%', effect: () => {
+                            player.critDamage += 0.2;
+                            addFloatingText("爆伤+20%", player.x, player.y - 30, "#ffaa00");
+                        }
+                    },
+                    {
+                        name: '🎯 穿透+1', effect: () => {
+                            player.piercing += 1;
+                            addFloatingText("穿透+1", player.x, player.y - 30, "#aaccff");
+                        }
+                    },
+                    {
+                        name: '💰 50金币', effect: () => {
+                            player.gold += 50;
+                            addFloatingText("+50金币", player.x, player.y - 30, "#ffd966");
+                        }
+                    },
+                    {
+                        name: '💖 最大生命+10', effect: () => {
+                            player.maxHp += 10;
+                            player.hp += 10;
+                            addFloatingText("生命上限+10", player.x, player.y - 30, "#ff8888");
+                        }
+                    },
+                    {
+                        name: '👟 速度等级+1', effect: () => {
+                            player.speedBonus += 1;
+                            addFloatingText("速度提升", player.x, player.y - 30, "#88ff88");
+                        }
+                    },
+                    {
+                        name: '🌀 闪避等级+1', effect: () => {
+                            player.dodge += 1;
+                            addFloatingText("闪避提升", player.x, player.y - 30, "#88aaff");
+                        }
+                    },
+                ];
+
+                let item = items[Math.floor(Math.random() * items.length)];
+                item.effect();
+
+                setTimeout(() => {
+                    let idx = chests.findIndex(c => c === chest);
+                    if (idx !== -1) chests.splice(idx, 1);
+                }, 500);
+            }
+
+            // 子弹发射
+            function shootBullet(now) {
+                if (gameState !== STATE_PLAYING) return;
+                if (now - lastShotTime < player.fireInterval) return;
+                lastShotTime = now;
+
+                let dx = mouseX - (player.x - worldOffsetX);
+                let dy = mouseY - (player.y - worldOffsetY);
+                let len = Math.hypot(dx, dy);
+                if (len < 0.001) {
+                    dx = 0; dy = -1;
+                } else {
+                    dx /= len;
+                    dy /= len;
+                }
+
+                let bulletCount = player.bulletCount;
+                let baseAngle = Math.atan2(dy, dx);
+                let spread = 0.35;
+
+                for (let i = 0; i < bulletCount; i++) {
+                    let angle;
+                    if (bulletCount === 1) {
+                        angle = baseAngle;
+                    } else {
+                        let offset = (i / (bulletCount - 1) - 0.5) * spread;
+                        angle = baseAngle + offset;
+                    }
+                    let bulletDx = Math.cos(angle);
+                    let bulletDy = Math.sin(angle);
+
+                    let isCrit = Math.random() < player.critChance;
+                    let damageMult = isCrit ? player.critDamage : 1.0;
+
+                    bullets.push({
+                        x: player.x + bulletDx * (player.radius + 3),
+                        y: player.y + bulletDy * (player.radius + 3),
+                        vx: bulletDx * player.bulletSpeed,
+                        vy: bulletDy * player.bulletSpeed,
+                        radius: player.bulletSize,
+                        damage: player.damage * damageMult,
+                        piercing: player.piercing,
+                        hitEnemies: new Set(),
+                        isCrit: isCrit,
+                        life: 3.0,
+                        fromBoss: false,
+                    });
+                }
+            }
+
+            // 升级选项生成
+            function generateUpgradeOptions() {
+                const pool = [
+                    { name: '❤️ 最大生命 +8', apply: (p) => { p.maxHp += 8; p.hp += 8; } },
+                    { name: '⚡ 伤害 +1.0', apply: (p) => { p.damage += 1.0; } },
+                    { name: '🏹 子弹数 +1', apply: (p) => { p.bulletCount = Math.min(10, p.bulletCount + 1); } },
+                    { name: '📈 射速 间隔-0.03s', apply: (p) => { p.fireInterval = Math.max(0.08, p.fireInterval - 0.03); } },
+                    { name: '👟 速度等级+1', apply: (p) => { p.speedBonus += 1; } },
+                    { name: '🌀 闪避等级+1', apply: (p) => { p.dodge += 1; } },
+                    { name: '💥 暴击率 +4%', apply: (p) => { p.critChance = Math.min(0.8, p.critChance + 0.04); } },
+                    { name: '🗡️ 暴击伤害 +30%', apply: (p) => { p.critDamage += 0.3; } },
+                    { name: '🎯 穿透 +1', apply: (p) => { p.piercing += 1; } },
+                    { name: '🔫 子弹大小 +3', apply: (p) => { p.bulletSize += 3; } },
+                ];
+                let shuffled = [...pool].sort(() => Math.random() - 0.5);
+                return shuffled.slice(0, 3);
+            }
+
+            // 应用升级 - 修复跳级bug
+            function applyUpgrade(index) {
+                if (index < 0 || index >= upgradeOptions.length) return;
+
+                // 保存当前所需的经验（升级前）
+                const oldNextExp = player.nextExp;
+
+                // 应用升级效果
+                upgradeOptions[index].apply(player);
+
+                // 提升等级
+                player.level++;
+                // 扣除经验
+                player.exp -= oldNextExp;
+                // 计算新的下一级所需经验
+                player.nextExp = Math.floor(BASE_EXP_NEXT + player.level * EXP_INCREASE_PER_LEVEL);
+
+                // 清空升级选项
+                upgradeOptions = [];
+
+                // 检查是否还能继续升级
+                if (player.exp >= player.nextExp) {
+                    // 再次进入升级界面
+                    gameState = STATE_UPGRADE;
+                    upgradeOptions = generateUpgradeOptions();
+                } else {
+                    // 返回游戏
+                    gameState = STATE_PLAYING;
+                }
+                updateUI();
+            }
+
+            // 检查是否需要升级（进入升级界面）
+            function checkLevelUp() {
+                // 如果当前经验足够升级，且不在升级界面或商店中，则进入升级界面
+                if (player.exp >= player.nextExp && gameState === STATE_PLAYING) {
+                    gameState = STATE_UPGRADE;
+                    upgradeOptions = generateUpgradeOptions();
+                }
+            }
+
+            // 生成商店物品（固定三个槽位）
+            function generateShopItems() {
+                const items = [
+                    { name: '❤️ 回血50%', price: 30, effect: () => { player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5); } },
+                    { name: '💪 攻击力+2', price: 40, effect: () => { player.damage += 2; } },
+                    { name: '🏹 子弹数+1', price: 50, effect: () => { player.bulletCount = Math.min(10, player.bulletCount + 1); } },
+                    { name: '⚡ 攻速提升', price: 45, effect: () => { player.fireInterval = Math.max(0.08, player.fireInterval - 0.04); } },
+                    { name: '💥 暴击率+5%', price: 40, effect: () => { player.critChance = Math.min(0.8, player.critChance + 0.05); } },
+                    { name: '🗡️ 暴击伤害+30%', price: 50, effect: () => { player.critDamage += 0.3; } },
+                    { name: '🎯 穿透+1', price: 35, effect: () => { player.piercing += 1; } },
+                    { name: '💖 最大生命+15', price: 40, effect: () => { player.maxHp += 15; player.hp += 15; } },
+                ];
+                let shuffled = items.sort(() => Math.random() - 0.5).slice(0, 3);
+                return shuffled;
+            }
+
+            // 刷新商店（按R键触发）
+            function refreshShop() {
+                if (gameState !== STATE_SHOP) return;
+                let cost = 10 + shopRefreshCount * 10; // 10,20,30,...
+                if (player.gold < cost) {
+                    addFloatingText("金币不足", player.x, player.y - 40, "#ff5555");
+                    return;
+                }
+                player.gold -= cost;
+                shopRefreshCount++;
+                let newItems = generateShopItems();
+                shopItems = [newItems[0] || null, newItems[1] || null, newItems[2] || null];
+                addFloatingText("商店已刷新", player.x, player.y - 30, "#aaffaa");
+            }
+
+            function buyShopItem(index) {
+                if (index < 0 || index >= 3) return;
+                let item = shopItems[index];
+                if (!item) {
+                    addFloatingText("该物品已售罄", player.x, player.y - 40, "#aaaaaa");
+                    return;
+                }
+                if (player.gold < item.price) {
+                    addFloatingText("金币不足", player.x, player.y - 40, "#ff5555");
+                    return;
+                }
+                player.gold -= item.price;
+                item.effect();
+                addFloatingText("已购买 " + item.name, player.x, player.y - 30, "#aaffaa");
+                shopItems[index] = null;
+                // 不再自动关闭商店，玩家可以继续刷新购买
+            }
+
+            // ---------- 更新逻辑 ----------
+            function updateGame(dt, nowSeconds) {
+                if (gameState !== STATE_PLAYING) return;
+
+                gameTime += dt;
+
+                if (player.invincibleTimer > 0) {
+                    player.invincibleTimer -= dt;
+                }
+
+                // 移动
+                let moveX = 0, moveY = 0;
+                if (keys[keyMap.up]) moveY -= 1;
+                if (keys[keyMap.down]) moveY += 1;
+                if (keys[keyMap.left]) moveX -= 1;
+                if (keys[keyMap.right]) moveX += 1;
+                if (moveX !== 0 || moveY !== 0) {
+                    let len = Math.hypot(moveX, moveY);
+                    let speed = getFinalSpeed();
+                    moveX = moveX / len * speed * dt;
+                    moveY = moveY / len * speed * dt;
+                    player.x += moveX;
+                    player.y += moveY;
+                } else if (touchActive) {
+                    let dx = touchTargetX - player.x;
+                    let dy = touchTargetY - player.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 10) {
+                        let speed = getFinalSpeed();
+                        let move = Math.min(speed * dt, dist * 0.9);
+                        player.x += (dx / dist) * move;
+                        player.y += (dy / dist) * move;
+                    }
+                }
+
+                worldOffsetX = player.x - W / 2;
+                worldOffsetY = player.y - H / 2;
+
+                // 自动射击
+                shootBullet(nowSeconds);
+
+                // 生成小怪、宝箱、精英、Boss
+                difficultyTimer += dt;
+                spawnEnemy(nowSeconds);
+                spawnChest(nowSeconds);
+                spawnElite(nowSeconds);
+
+                // 检查Boss倒计时
+                checkBossCountdown(nowSeconds);
+                if (bossCountdown > 0) {
+                    bossCountdown -= dt;
+                    if (bossCountdown <= 0) {
+                        bossCountdown = 0;
+                        spawnBoss(nowSeconds);
+                    }
+                }
+
+                // 普通怪移动
+                for (let e of enemies) {
+                    let dx = player.x - e.x;
+                    let dy = player.y - e.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 0.01) {
+                        let move = e.speed * dt;
+                        e.x += (dx / dist) * move;
+                        e.y += (dy / dist) * move;
+                    }
+                }
+
+                // 精英怪移动
+                for (let e of elites) {
+                    let dx = player.x - e.x;
+                    let dy = player.y - e.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 0.01) {
+                        let move = e.speed * dt;
+                        e.x += (dx / dist) * move;
+                        e.y += (dy / dist) * move;
+                    }
+                }
+
+                // Boss移动与攻击
+                for (let boss of bosses) {
+                    let dx = player.x - boss.x;
+                    let dy = player.y - boss.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 150) {
+                        let move = boss.speed * dt;
+                        boss.x += (dx / dist) * move;
+                        boss.y += (dy / dist) * move;
+                    } else {
+                        boss.attackTimer += dt;
+                        if (boss.attackTimer >= boss.attackInterval) {
+                            boss.attackTimer = 0;
+                            bossShoot(boss, nowSeconds);
+                        }
+                    }
+                }
+
+                // 子弹移动与碰撞
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    let b = bullets[i];
+                    b.x += b.vx * dt;
+                    b.y += b.vy * dt;
+                    b.life -= dt;
+                    if (b.life <= 0) {
+                        bullets.splice(i, 1);
+                        continue;
+                    }
+
+                    if (!b.fromBoss) {
+                        // 友方子弹 vs 小怪 + 精英 + Boss
+                        let hit = false;
+                        // 打小怪
+                        for (let j = enemies.length - 1; j >= 0; j--) {
+                            let e = enemies[j];
+                            if (b.hitEnemies.has(e)) continue;
+                            let d = Math.hypot(b.x - e.x, b.y - e.y);
+                            if (d < b.radius + e.radius) {
+                                e.health -= b.damage;
+                                b.hitEnemies.add(e);
+                                if (e.health <= 0) {
+                                    spawnXpFromEnemy(e.x, e.y, e.radius);
+                                    enemies.splice(j, 1);
+                                    killCount++;
+                                }
+                                if (b.piercing <= 0) {
+                                    hit = true;
+                                    break;
+                                } else {
+                                    b.piercing--;
+                                }
+                            }
+                        }
+                        // 打精英
+                        for (let j = elites.length - 1; j >= 0; j--) {
+                            let e = elites[j];
+                            if (b.hitEnemies.has(e)) continue;
+                            let d = Math.hypot(b.x - e.x, b.y - e.y);
+                            if (d < b.radius + e.radius) {
+                                e.health -= b.damage;
+                                b.hitEnemies.add(e);
+                                if (e.health <= 0) {
+                                    spawnXpFromEnemy(e.x, e.y, e.radius, false, true);
+                                    elites.splice(j, 1);
+                                    killCount++;
+                                }
+                                if (b.piercing <= 0) {
+                                    hit = true;
+                                    break;
+                                } else {
+                                    b.piercing--;
+                                }
+                            }
+                        }
+                        // 打Boss
+                        for (let j = bosses.length - 1; j >= 0; j--) {
+                            let boss = bosses[j];
+                            if (b.hitEnemies.has(boss)) continue;
+                            let d = Math.hypot(b.x - boss.x, b.y - boss.y);
+                            if (d < b.radius + boss.radius) {
+                                boss.health -= b.damage;
+                                b.hitEnemies.add(boss);
+                                if (boss.health <= 0) {
+                                    spawnXpFromEnemy(boss.x, boss.y, boss.radius, true);
+                                    bosses.splice(j, 1);
+                                    killCount++;
+                                    bossKillCount++;
+                                    // 进入商店，生成三个新物品，重置刷新次数
+                                    let newItems = generateShopItems();
+                                    shopItems = [newItems[0] || null, newItems[1] || null, newItems[2] || null];
+                                    shopRefreshCount = 0;
+                                    gameState = STATE_SHOP;
+                                }
+                                if (b.piercing <= 0) {
+                                    hit = true;
+                                    break;
+                                } else {
+                                    b.piercing--;
+                                }
+                            }
+                        }
+                        if (hit) {
+                            bullets.splice(i, 1);
+                            continue;
+                        }
+                    } else {
+                        // 敌方子弹 vs 玩家
+                        let d = Math.hypot(b.x - player.x, b.y - player.y);
+                        if (d < b.radius + player.radius) {
+                            if (player.invincibleTimer <= 0) {
+                                let dodgeChance = getFinalDodge();
+                                if (Math.random() < dodgeChance) {
+                                    addFloatingText("闪避!", player.x, player.y - 40, "#aaffaa");
+                                    player.invincibleTimer = INVINCIBLE_DURATION * 0.3;
+                                } else {
+                                    player.hp -= b.damage;
+                                    player.invincibleTimer = INVINCIBLE_DURATION;
+                                }
+                                if (player.hp <= 0) {
+                                    gameState = STATE_GAMEOVER;
+                                }
+                            }
+                            bullets.splice(i, 1);
+                            continue;
+                        }
+                    }
+                }
+
+                // 经验拾取
+                for (let i = xpOrbs.length - 1; i >= 0; i--) {
+                    let orb = xpOrbs[i];
+                    let dist = Math.hypot(player.x - orb.x, player.y - orb.y);
+                    if (dist < player.radius + orb.radius) {
+                        player.exp += orb.value;
+                        xpOrbs.splice(i, 1);
+                    }
+                }
+
+                // 宝箱检测
+                nearbyChest = null;
+                for (let i = 0; i < chests.length; i++) {
+                    let chest = chests[i];
+                    if (chest.isOpen) continue;
+                    let dist = Math.hypot(player.x - chest.x, player.y - chest.y);
+                    if (dist < player.radius + chest.radius + 20) {
+                        nearbyChest = chest;
+                        if (keys[keyMap.interact]) {
+                            openChest(i);
+                            keys[keyMap.interact] = false;
+                        }
+                        break;
+                    }
+                }
+
+                // 玩家与普通怪碰撞
+                for (let e of enemies) {
+                    let dx = player.x - e.x;
+                    let dy = player.y - e.y;
+                    let dist = Math.hypot(dx, dy);
+                    let minDist = player.radius + e.radius;
+                    if (dist < minDist) {
+                        if (dist > 0.001) {
+                            let overlap = minDist - dist;
+                            let angle = Math.atan2(dy, dx);
+                            let pushX = Math.cos(angle) * overlap * 0.6;
+                            let pushY = Math.sin(angle) * overlap * 0.6;
+                            player.x += pushX;
+                            player.y += pushY;
+                        }
+                        if (player.invincibleTimer <= 0) {
+                            let dodgeChance = getFinalDodge();
+                            if (Math.random() < dodgeChance) {
+                                addFloatingText("闪避!", player.x, player.y - 40, "#aaffaa");
+                                player.invincibleTimer = INVINCIBLE_DURATION * 0.3;
+                            } else {
+                                let dmg = Math.max(1, Math.floor(e.radius / 5));
+                                player.hp -= dmg;
+                                player.invincibleTimer = INVINCIBLE_DURATION;
+                            }
+                            if (player.hp <= 0) {
+                                gameState = STATE_GAMEOVER;
+                            }
+                        }
+                    }
+                }
+
+                // 玩家与精英怪碰撞
+                for (let e of elites) {
+                    let dx = player.x - e.x;
+                    let dy = player.y - e.y;
+                    let dist = Math.hypot(dx, dy);
+                    let minDist = player.radius + e.radius;
+                    if (dist < minDist) {
+                        if (dist > 0.001) {
+                            let overlap = minDist - dist;
+                            let angle = Math.atan2(dy, dx);
+                            let pushX = Math.cos(angle) * overlap * 0.6;
+                            let pushY = Math.sin(angle) * overlap * 0.6;
+                            player.x += pushX;
+                            player.y += pushY;
+                        }
+                        if (player.invincibleTimer <= 0) {
+                            let dodgeChance = getFinalDodge();
+                            if (Math.random() < dodgeChance) {
+                                addFloatingText("闪避!", player.x, player.y - 40, "#aaffaa");
+                                player.invincibleTimer = INVINCIBLE_DURATION * 0.3;
+                            } else {
+                                let dmg = Math.max(2, Math.floor(e.radius / 4));
+                                player.hp -= dmg;
+                                player.invincibleTimer = INVINCIBLE_DURATION;
+                            }
+                            if (player.hp <= 0) {
+                                gameState = STATE_GAMEOVER;
+                            }
+                        }
+                    }
+                }
+
+                // 玩家与Boss碰撞
+                for (let boss of bosses) {
+                    let dx = player.x - boss.x;
+                    let dy = player.y - boss.y;
+                    let dist = Math.hypot(dx, dy);
+                    let minDist = player.radius + boss.radius;
+                    if (dist < minDist) {
+                        if (dist > 0.001) {
+                            let overlap = minDist - dist;
+                            let angle = Math.atan2(dy, dx);
+                            let pushX = Math.cos(angle) * overlap * 0.4;
+                            let pushY = Math.sin(angle) * overlap * 0.4;
+                            player.x += pushX;
+                            player.y += pushY;
+                        }
+                        if (player.invincibleTimer <= 0) {
+                            let dodgeChance = getFinalDodge();
+                            if (Math.random() < dodgeChance) {
+                                addFloatingText("闪避!", player.x, player.y - 40, "#aaffaa");
+                                player.invincibleTimer = INVINCIBLE_DURATION * 0.3;
+                            } else {
+                                player.hp -= 5;
+                                player.invincibleTimer = INVINCIBLE_DURATION;
+                            }
+                            if (player.hp <= 0) {
+                                gameState = STATE_GAMEOVER;
+                            }
+                        }
+                    }
+                }
+
+                // 更新浮动文字
+                for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                    let ft = floatingTexts[i];
+                    ft.life -= dt;
+                    if (ft.life <= 0) {
+                        floatingTexts.splice(i, 1);
+                    }
+                }
+
+                checkLevelUp();
+                updateUI();
+            }
+
+            // 绘制
+            function draw() {
+                ctx.clearRect(0, 0, W, H);
+
+                // 网格
+                ctx.strokeStyle = "#2e3a44";
+                ctx.lineWidth = 1;
+                let startX = Math.floor(worldOffsetX / 40) * 40 - worldOffsetX;
+                let startY = Math.floor(worldOffsetY / 40) * 40 - worldOffsetY;
+                for (let i = startX; i < W; i += 40) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#202a33";
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, H);
+                    ctx.stroke();
+                }
+                for (let i = startY; i < H; i += 40) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#202a33";
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(W, i);
+                    ctx.stroke();
+                }
+
+                const worldToScreen = (wx, wy) => ({
+                    x: wx - worldOffsetX,
+                    y: wy - worldOffsetY
+                });
+
+                // 经验球
+                for (let o of xpOrbs) {
+                    let { x, y } = worldToScreen(o.x, o.y);
+                    ctx.beginPath();
+                    ctx.arc(x, y, o.radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#f7d44a";
+                    ctx.shadowColor = "#ffb347";
+                    ctx.shadowBlur = 12;
+                    ctx.fill();
+                }
+
+                // 子弹
+                for (let b of bullets) {
+                    let { x, y } = worldToScreen(b.x, b.y);
+                    ctx.beginPath();
+                    ctx.arc(x, y, b.radius - 1, 0, 2 * Math.PI);
+                    if (b.fromBoss) {
+                        ctx.fillStyle = "#ff6666";
+                        ctx.shadowColor = "#ff0000";
+                    } else if (b.isCrit) {
+                        ctx.fillStyle = "#ffaa66";
+                        ctx.shadowColor = "#ff8800";
+                    } else {
+                        ctx.fillStyle = "#6dd5ff";
+                        ctx.shadowColor = "#00a6ff";
+                    }
+                    ctx.shadowBlur = 12;
+                    ctx.fill();
+                }
+
+                // 宝箱
+                for (let c of chests) {
+                    let { x, y } = worldToScreen(c.x, c.y);
+                    if (c.isOpen) continue;
+                    ctx.beginPath();
+                    ctx.arc(x, y, c.radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#d4af37";
+                    ctx.shadowColor = "#ffd700";
+                    ctx.shadowBlur = 20;
+                    ctx.fill();
+                    ctx.fillStyle = "#000";
+                    ctx.font = "20px monospace";
+                    ctx.fillText("?", x - 7, y + 7);
+                    if (nearbyChest === c) {
+                        ctx.strokeStyle = "#fff";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(x, y, c.radius + 5, 0, 2 * Math.PI);
+                        ctx.stroke();
+                        ctx.fillStyle = "#fff";
+                        ctx.font = "14px monospace";
+                        ctx.fillText(`按 ${keyMap.interact.toUpperCase()} 开启`, x - 45, y - 25);
+                    }
+                }
+
+                // 普通怪
+                for (let e of enemies) {
+                    let { x, y } = worldToScreen(e.x, e.y);
+                    ctx.beginPath();
+                    ctx.arc(x, y, e.radius, 0, 2 * Math.PI);
+                    let healthPercent = e.health / e.maxHealth;
+                    ctx.fillStyle = `hsl(0, 80%, ${40 + 20 * healthPercent}%)`;
+                    ctx.shadowColor = "#ff4444";
+                    ctx.shadowBlur = 14;
+                    ctx.fill();
+                }
+
+                // 精英怪 (橙色)
+                for (let e of elites) {
+                    let { x, y } = worldToScreen(e.x, e.y);
+                    ctx.beginPath();
+                    ctx.arc(x, y, e.radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#ff9933";
+                    ctx.shadowColor = "#ff7700";
+                    ctx.shadowBlur = 18;
+                    ctx.fill();
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "14px monospace";
+                    ctx.fillText(`E${Math.floor(e.health)}`, x - 15, y - 15);
+                }
+
+                // Boss
+                for (let boss of bosses) {
+                    let { x, y } = worldToScreen(boss.x, boss.y);
+                    ctx.beginPath();
+                    ctx.arc(x, y, boss.radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#aa44aa";
+                    ctx.shadowColor = "#ff00ff";
+                    ctx.shadowBlur = 25;
+                    ctx.fill();
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "16px monospace";
+                    ctx.fillText(`BOSS ${Math.floor(boss.health)}`, x - 35, y - 30);
+                }
+
+                // 玩家
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = "#ffffff";
+                if (player.invincibleTimer > 0 && (Math.floor(Date.now() / 200) % 2 === 0)) {
+                    ctx.fillStyle = "#fffbe3";
+                } else {
+                    ctx.fillStyle = "#f0f0ff";
+                }
+                let screenPlayer = worldToScreen(player.x, player.y);
+                ctx.beginPath();
+                ctx.arc(screenPlayer.x, screenPlayer.y, player.radius, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // 瞄准线
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.moveTo(screenPlayer.x, screenPlayer.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.strokeStyle = "#b3a1a155";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 属性面板
+                ctx.fillStyle = "#ffffffcc";
+                ctx.font = "14px monospace";
+                ctx.fillText(`暴击:${Math.round(player.critChance * 100)}% 爆伤:${Math.round(player.critDamage * 100)}% 穿透:${player.piercing}`, 20, 30);
+                ctx.fillText(`速度:${Math.round(getFinalSpeed())} (等级${player.speedBonus}) 闪避:${Math.round(getFinalDodge() * 100)}% (等级${player.dodge})`, 20, 50);
+
+                // 浮动文字
+                for (let ft of floatingTexts) {
+                    let { x, y } = worldToScreen(ft.x, ft.y);
+                    ctx.globalAlpha = ft.life;
+                    ctx.font = "bold 20px 'Courier New'";
+                    ctx.fillStyle = ft.color;
+                    ctx.fillText(ft.text, x - 30, y - 40 - (1 - ft.life) * 20);
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // 统一界面尺寸 600x320，位置 (200,150)
+                const panelX = 200, panelY = 150, panelW = 600, panelH = 320;
+
+                // 升级界面
+                if (gameState === STATE_UPGRADE && upgradeOptions.length === 3) {
+                    ctx.fillStyle = "#0f172ad9";
+                    ctx.shadowBlur = 0;
+                    ctx.fillRect(panelX, panelY, panelW, panelH);
+                    ctx.strokeStyle = "#c79a6e";
+                    ctx.lineWidth = 6;
+                    ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+                    ctx.font = "bold 34px 'Courier New'";
+                    ctx.fillStyle = "#f7e3b2";
+                    ctx.fillText("⚡ 升级选择", panelX + 160, panelY + 70);
+
+                    ctx.font = "26px 'Courier New'";
+                    ctx.textBaseline = "middle";
+                    // 序号右对齐
+                    ctx.textAlign = "right";
+                    for (let i = 0; i < 3; i++) {
+                        let y = panelY + 130 + i * 60;
+                        ctx.fillStyle = "#c7b087";
+                        ctx.fillText(`[${i + 1}]`, panelX + 90, y);
+                    }
+                    // 名称左对齐
+                    ctx.textAlign = "left";
+                    for (let i = 0; i < 3; i++) {
+                        let y = panelY + 130 + i * 60;
+                        ctx.fillStyle = "#f0dbb4";
+                        ctx.fillText(upgradeOptions[i].name, panelX + 110, y);
+                    }
+                    ctx.textAlign = "left";
+                    ctx.textBaseline = "alphabetic";
+                    ctx.font = "18px monospace";
+                    ctx.fillStyle = "#b5c9b0";
+                    ctx.fillText("按数字键 1 / 2 / 3 选择", panelX + 110, panelY + 300);
+                }
+
+                // 商店界面
+                if (gameState === STATE_SHOP) {
+                    ctx.fillStyle = "#1e2a3ad9";
+                    ctx.shadowBlur = 0;
+                    ctx.fillRect(panelX, panelY, panelW, panelH);
+                    ctx.strokeStyle = "#ffd966";
+                    ctx.lineWidth = 6;
+                    ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+                    ctx.font = "bold 34px 'Courier New'";
+                    ctx.fillStyle = "#f7e3b2";
+                    ctx.fillText("🏪 神秘商店", panelX + 160, panelY + 70);
+                    ctx.font = "20px monospace";
+                    ctx.fillStyle = "#ffd966";
+                    ctx.fillText(`金币: ${player.gold}`, panelX + 400, panelY + 70);
+
+                    ctx.font = "26px 'Courier New'";
+                    ctx.textBaseline = "middle";
+                    // 序号右对齐
+                    ctx.textAlign = "right";
+                    for (let i = 0; i < 3; i++) {
+                        let y = panelY + 130 + i * 60;
+                        ctx.fillStyle = "#c7b087";
+                        ctx.fillText(`[${i + 1}]`, panelX + 90, y);
+                    }
+                    // 名称左对齐
+                    ctx.textAlign = "left";
+                    for (let i = 0; i < 3; i++) {
+                        let y = panelY + 130 + i * 60;
+                        let item = shopItems[i];
+                        if (item) {
+                            ctx.fillStyle = "#f0dbb4";
+                            ctx.fillText(`${item.name}  - ${item.price}💰`, panelX + 110, y);
+                        } else {
+                            ctx.fillStyle = "#888888";
+                            ctx.fillText("已售罄", panelX + 110, y);
+                        }
+                    }
+                    ctx.textAlign = "left";
+                    ctx.textBaseline = "alphabetic";
+                    ctx.font = "18px monospace";
+                    ctx.fillStyle = "#b5c9b0";
+                    // 显示刷新费用和按键提示
+                    let refreshCost = 10 + shopRefreshCount * 10;
+                    ctx.fillText(`按数字键 1/2/3 购买, 按 [R] 刷新 (${refreshCost}💰), [P] 离开`, panelX + 60, panelY + 300);
+                }
+
+                // 暂停界面
+                if (gameState === STATE_PAUSED) {
+                    ctx.fillStyle = "#000000aa";
+                    ctx.fillRect(0, 0, W, H);
+                    ctx.font = "56px 'Courier New'";
+                    ctx.fillStyle = "#dddddd";
+                    ctx.fillText("⏸ 暂停", 380, 300);
+                    ctx.font = "24px monospace";
+                    ctx.fillStyle = "#b5a87d";
+                    ctx.fillText(`按 ${keyMap.pause.toUpperCase()} 继续`, 420, 380);
+                }
+
+                if (gameState === STATE_GAMEOVER) {
+                    ctx.fillStyle = "#000000cc";
+                    ctx.fillRect(0, 0, W, H);
+                    ctx.font = "56px 'Courier New'";
+                    ctx.fillStyle = "#e05a5a";
+                    ctx.fillText("💔 熄灭了", 300, 300);
+                    ctx.font = "28px monospace";
+                    ctx.fillStyle = "#b5a87d";
+                    ctx.fillText("点击 [重来] 再试一次", 340, 400);
+                }
+
+                ctx.shadowBlur = 0;
+            }
+
+            // 动画循环
+            function tick(now) {
+                if (!lastTimestamp) {
+                    lastTimestamp = now;
+                    requestAnimationFrame(tick);
+                    return;
+                }
+                const dt = Math.min(0.05, (now - lastTimestamp) / 1000);
+                lastTimestamp = now;
+
+                const nowSeconds = now / 1000;
+
+                if (gameState !== STATE_PAUSED) {
+                    updateGame(dt, nowSeconds);
+                }
+
+                draw();
+                requestAnimationFrame(tick);
+            }
+
+            // 事件绑定
+            function initEvents() {
+                canvas.addEventListener('mousemove', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    mouseX = (e.clientX - rect.left) * scaleX;
+                    mouseY = (e.clientY - rect.top) * scaleY;
+                    mouseX = clamp(mouseX, 0, canvas.width);
+                    mouseY = clamp(mouseY, 0, canvas.height);
+                });
+
+                window.addEventListener('keydown', (e) => {
+                    const k = e.key.toLowerCase();
+                    if (remapAction) return;
+
+                    if (k === keyMap.pause) {
+                        if (gameState === STATE_PLAYING) {
+                            gameState = STATE_PAUSED;
+                        } else if (gameState === STATE_PAUSED) {
+                            gameState = STATE_PLAYING;
+                        } else if (gameState === STATE_SHOP) {
+                            gameState = STATE_PLAYING;
+                        }
+                        e.preventDefault();
+                    } else if (gameState === STATE_UPGRADE) {
+                        if (k === '1') applyUpgrade(0);
+                        if (k === '2') applyUpgrade(1);
+                        if (k === '3') applyUpgrade(2);
+                        e.preventDefault();
+                    } else if (gameState === STATE_SHOP) {
+                        if (k === '1') buyShopItem(0);
+                        if (k === '2') buyShopItem(1);
+                        if (k === '3') buyShopItem(2);
+                        if (k === 'r') refreshShop();
+                        e.preventDefault();
+                    } else {
+                        keys[k] = true;
+                        e.preventDefault();
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    const k = e.key.toLowerCase();
+                    keys[k] = false;
+                });
+
+                restartBtn.addEventListener('click', resetGame);
+            }
+
+            function init() {
+                resetGame();
+                initEvents();
+                lastTimestamp = 0;
+                if (gameLoop) cancelAnimationFrame(gameLoop);
+                gameLoop = requestAnimationFrame(tick);
+            }
+
+            init();
+        })();</script>
+</body>
+</html>
