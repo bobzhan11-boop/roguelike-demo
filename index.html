@@ -584,7 +584,7 @@
                 {name:'💖 最大生命+15',price:shopPrice(45),effect:()=>{player.maxHp+=15;player.hp+=15;}}
             ].sort(()=>Math.random()-0.5).slice(0,3);
         }
-        function refreshShop(){if(gameState!==STATE_SHOP)return;let c=shopPrice(10)+shopRefreshCount*shopPrice(10);if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
+        function refreshShop(){if(gameState!==STATE_SHOP)return;let c=10*Math.pow(2,shopRefreshCount);if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
         function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;updateUI();}
 
         // ---------- UPDATE ----------
@@ -872,7 +872,7 @@
                 ctx.font="26px 'Courier New'";ctx.textBaseline="middle";
                 ctx.textAlign="right";for(let i=0;i<3;i++){ctx.fillStyle="#c7b087";ctx.fillText(`[${i+1}]`,pnX+90,pnY+130+i*60);}
                 ctx.textAlign="left";for(let i=0;i<3;i++){let it=shopItems[i];if(it){ctx.fillStyle="#f0dbb4";ctx.fillText(`${it.name}  - ${it.price}💰`,pnX+110,pnY+130+i*60);}else{ctx.fillStyle="#888888";ctx.fillText("已售罄",pnX+110,pnY+130+i*60);}}
-                ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5c9b0";let rc=10+shopRefreshCount*10;
+                ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5c9b0";let rc=10*Math.pow(2,shopRefreshCount);
                 if(controlMode==='touch'){ctx.fillStyle="#3a4a5acc";ctx.fillRect(pnX+60,pnY+280,140,30);ctx.fillRect(pnX+350,pnY+280,140,30);ctx.fillStyle="#b5c9b0";ctx.fillText(`刷新(${rc}💰)`,pnX+75,pnY+300);ctx.fillText("离开商店",pnX+375,pnY+300);}
                 else ctx.fillText(`1/2/3购买 [R]刷新(${rc}💰) [${keyMap.pause.toUpperCase()}]离开`,pnX+60,pnY+300);
             }
