@@ -312,7 +312,7 @@
             if(player.isDashing)return;
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
             screenShakeTimer=0.2;screenShakeIntensity=4+Math.min(amount,8);
-            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.5;screenShakeIntensity=15;}
+            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;}
         }
         function tryDodgeOrDamage(amount){
             if(player.invincibleTimer>0||player.isDashing)return;
@@ -620,7 +620,7 @@
             ctx.clearRect(0,0,W,H);
             // Screen shake offset
             let shX=0,shY=0;
-            if(screenShakeTimer>0){shX=(Math.random()-0.5)*screenShakeIntensity*2;shY=(Math.random()-0.5)*screenShakeIntensity*2;}
+            if(screenShakeTimer>0){let fade=Math.min(1,screenShakeTimer/0.15);shX=(Math.random()-0.5)*screenShakeIntensity*2*fade;shY=(Math.random()-0.5)*screenShakeIntensity*2*fade;}
             ctx.save();ctx.translate(shX,shY);
 
             // Grid
