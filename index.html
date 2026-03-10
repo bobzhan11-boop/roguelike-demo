@@ -327,6 +327,9 @@
         const CHEST_SPAWN_INTERVAL=30;
         let bossCountdown=0,bossCountdownReason='',lastBossSpawnTime=0,lastBossLevel=0;
         const BOSS_SPAWN_INTERVAL=180,BOSS_COUNTDOWN_TIME=5;
+        // Horde events
+        let hordeTimer=0,hordeWarning=0,hordeCount=0;
+        const HORDE_INTERVAL=120,HORDE_WARNING_TIME=3;
         let lastEliteSpawnTime=0;
 
         // Screen shake
@@ -420,9 +423,10 @@
                 critChance:BASE_CRIT_CHANCE,critDamage:BASE_CRIT_DAMAGE,piercing:BASE_PIERCING+role.piercingBase,bulletSize:BULLET_SIZE,
                 dodge:role.dodgeBase,invincibleTimer:0,radius:PLAYER_RADIUS,gold:0,damageFlash:0,
                 dashCooldown:0,isDashing:false,dashTimer:0,dashDirX:0,dashDirY:0,
-                skillTimer:0,skillActive:null,role:selectedRole};
+                skillTimer:0,skillActive:null,role:selectedRole,
+                lifesteal:0,magnetRange:0,thorns:0,magnetBoost:0,comboCount:0,comboTimer:0};
             enemies=[];elites=[];bullets=[];xpOrbs=[];chests=[];bosses=[];floatingTexts=[];magicZones=[];
-            playerZones=[];clones=[];
+            playerZones=[];clones=[];hordeTimer=0;hordeWarning=0;hordeCount=0;
             killCount=0;eliteKillCount=0;bossKillCount=0;lastShotTime=0;lastSpawnTime=0;lastChestSpawnTime=0;
             lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
@@ -529,6 +533,7 @@
                 {n:'💖 最大生命+10',f:()=>{player.maxHp+=10;player.hp+=10;addFloatingText("生命上限+10",player.x,player.y-30,"#ff8888");}},
                 {n:'👟 速度+1',f:()=>{player.speedBonus+=1;addFloatingText("速度提升",player.x,player.y-30,"#88ff88");}},
                 {n:'🌀 闪避+1',f:()=>{player.dodge+=1;addFloatingText("闪避提升",player.x,player.y-30,"#88aaff");}},
+                {n:'🧲 磁铁5秒',f:()=>{player.magnetBoost=5;addFloatingText("磁铁激活!",player.x,player.y-30,"#88ddff");}},
             ];
             items[Math.floor(Math.random()*items.length)].f();
             setTimeout(()=>{let idx=chests.findIndex(c=>c===ch);if(idx!==-1)chests.splice(idx,1);},500);
@@ -563,6 +568,9 @@
                 {name:'👟 速度+1',apply:p=>{p.speedBonus+=1;}},{name:'🌀 闪避+1',apply:p=>{p.dodge+=1;}},
                 {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},{name:'🗡️ 暴击伤害 +30%',apply:p=>{p.critDamage+=0.3;}},
                 {name:'🎯 穿透 +1',apply:p=>{p.piercing+=1;}},{name:'🔫 子弹大小 +3',apply:p=>{p.bulletSize+=3;}},
+                {name:'🧲 磁铁范围 +40',apply:p=>{p.magnetRange=Math.min(200,p.magnetRange+40);}},
+                {name:'🩸 生命窃取 +3%',apply:p=>{p.lifesteal=Math.min(0.2,p.lifesteal+0.03);}},
+                {name:'🦔 反伤 +2',apply:p=>{p.thorns+=2;}},
             ];return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
         }
         function applyUpgrade(i){
@@ -597,6 +605,8 @@
             if(screenShakeTimer>0)screenShakeTimer-=dt;
             if(player.skillTimer>0)player.skillTimer-=dt;
             if(player.skillActive){player.skillActive.timer-=dt;if(player.skillActive.timer<=0)player.skillActive=null;}
+            if(player.magnetBoost>0)player.magnetBoost-=dt;
+            if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboTimer<=0)player.comboCount=0;}
 
             // Dash movement
             if(player.isDashing){
@@ -619,6 +629,17 @@
 
             shootBullet(nowS);difficultyTimer+=dt;spawnEnemy(nowS);spawnChest(nowS);spawnElite(nowS);
             checkBossCountdown(nowS);
+            // Horde events
+            hordeTimer+=dt;
+            if(hordeWarning>0){hordeWarning-=dt;if(hordeWarning<=0){
+                let n=25+Math.floor(player.level*3);hordeCount++;
+                for(let i=0;i<n;i++){let a=Math.random()*Math.PI*2,d=350+Math.random()*200;
+                    let stats=getMonsterStatsByLevel(),r=5+Math.random()*6,hp=Math.max(1,Math.floor(r/3)*stats.healthMult+player.level*0.2),spd=(30+Math.random()*50)*stats.speedMult;
+                    enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:false,isElite:false,type:'normal',attackTimer:0});}
+                addFloatingText(`⚠️ 大波敌人! x${n}`,player.x,player.y-60,'#ff5555');
+                let bonus=15+hordeCount*10;player.gold+=bonus;addFloatingText(`+${bonus}💰 生存奖励`,player.x,player.y-30,'#ffd966');
+            }}
+            if(hordeTimer>=HORDE_INTERVAL&&hordeWarning<=0){hordeTimer=0;hordeWarning=HORDE_WARNING_TIME;addFloatingText('⚠️ 大波敌人即将来袭!',player.x,player.y-80,'#ff5555');}
             if(bossCountdown>0){bossCountdown-=dt;if(bossCountdown<=0){bossCountdown=0;spawnBoss(nowS);}}
 
             // Enemy movement (type-specific)
@@ -691,21 +712,30 @@
                     let hit=false;
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
                         e.health-=b.damage;b.hitEnemies.add(e);
+                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
                         if(e.health<=0){
                             if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0});}}
-                            spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;
+                            spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        e.health-=b.damage;b.hitEnemies.add(e);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
-                        bs.health-=b.damage;b.hitEnemies.add(bs);if(bs.health<=0){spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);bosses.splice(j,1);killCount++;bossKillCount++;
+                        bs.health-=b.damage;b.hitEnemies.add(bs);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        if(bs.health<=0){spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);bosses.splice(j,1);killCount++;bossKillCount++;player.comboCount++;player.comboTimer=2;
                             let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];shopRefreshCount=0;gameState=STATE_SHOP;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(hit){bullets.splice(i,1);continue;}
                 }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);bullets.splice(i,1);continue;}}
             }
 
-            // XP orbs
-            for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i];if(Math.hypot(player.x-o.x,player.y-o.y)<player.radius+o.radius){player.exp+=o.value;xpOrbs.splice(i,1);}}
+            // XP orbs (magnet attraction + combo multiplier)
+            let effMagnet=player.magnetBoost>0?300:player.magnetRange;
+            for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i],dx=player.x-o.x,dy=player.y-o.y,d=Math.hypot(dx,dy);
+                if(d<player.radius+o.radius){
+                    let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
+                    player.exp+=o.value*mult;xpOrbs.splice(i,1);
+                }else if(effMagnet>0&&d<effMagnet){let spd=250*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
+            }
 
             // Chests
             nearbyChest=null;
@@ -717,10 +747,11 @@
                 let e=enemies[j],dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy),md=player.radius+e.radius;
                 if(dist<md){
                     if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}
+                    if(player.thorns>0){e.health-=player.thorns;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;continue;}}
                     if(e.type==='exploder'){
                         tryDodgeOrDamage(Math.max(3,Math.floor(e.radius)));
                         addFloatingText("💥",e.x,e.y,"#ff8800");screenShakeTimer=0.15;screenShakeIntensity=6;
-                        spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;
+                        spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                     }else{tryDodgeOrDamage(Math.max(1,Math.floor(e.radius/5)));}
                 }
             }
@@ -828,6 +859,10 @@
                 if(sa.type==='frostNova'){sa.radius=Math.min(200,sa.radius+800*(1/60));ctx.beginPath();ctx.arc(sp.x,sp.y,sa.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,136,255,${sa.timer*1.5})`;ctx.lineWidth=3;ctx.stroke();
                     ctx.fillStyle=`rgba(150,200,255,${sa.timer*0.2})`;ctx.fill();}
             }
+            // Magnet range visual
+            if(player.magnetBoost>0){let pulse=0.15+0.1*Math.sin(Date.now()/150);ctx.beginPath();ctx.arc(sp.x,sp.y,300,0,Math.PI*2);ctx.strokeStyle=`rgba(100,200,255,${pulse})`;ctx.lineWidth=1;ctx.setLineDash([8,8]);ctx.stroke();ctx.setLineDash([]);}
+            // Thorns visual
+            if(player.thorns>0){let ta=0.15+0.1*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+3,0,Math.PI*2);ctx.strokeStyle=`rgba(255,150,50,${ta})`;ctx.lineWidth=1.5;ctx.stroke();}
             // Damage flash
             if(player.damageFlash>0){let al=Math.min(1,player.damageFlash/0.3);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+5,0,Math.PI*2);ctx.strokeStyle=`rgba(255,40,40,${al*0.8})`;ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius,0,Math.PI*2);ctx.fillStyle=`rgba(255,0,0,${al*0.35})`;ctx.fill();}
             // Aim line (keyboard only)
@@ -849,7 +884,18 @@
             // Stats (below leaderboard area)
             ctx.fillStyle="#ffffffcc";ctx.font="14px monospace";
             ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,100);
-            ctx.fillText(`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`,20,118);
+            let extraStats=`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`;
+            if(player.lifesteal>0)extraStats+=` 吸血:${Math.round(player.lifesteal*100)}%`;
+            if(player.thorns>0)extraStats+=` 反伤:${player.thorns}`;
+            ctx.fillText(extraStats,20,118);
+            // Combo indicator
+            if(player.comboCount>=3){
+                let cCol=player.comboCount>=10?'#ff4444':player.comboCount>=5?'#ffaa44':'#ffdd88';
+                let cMult=player.comboCount>=10?'2x':player.comboCount>=5?'1.5x':'';
+                ctx.fillStyle=cCol;ctx.font='bold 16px monospace';ctx.fillText(`连击 x${player.comboCount} ${cMult}`,W/2-60,30);
+            }
+            // Horde warning
+            if(hordeWarning>0){ctx.fillStyle='#ff5555';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`⚠️ 大波敌人 ${Math.ceil(hordeWarning)}s`,W/2,H/2-50);ctx.textAlign='left';}
 
             // Floating texts
             for(let ft of floatingTexts){let{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font="bold 20px 'Courier New'";ctx.fillStyle=ft.color;ctx.fillText(ft.text,x-30,y-40-(1-ft.life)*20);ctx.globalAlpha=1.0;}
