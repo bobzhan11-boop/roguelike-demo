@@ -16,6 +16,10 @@
         .mode-btn { background:#1a1f2b; border:3px solid #6b4f3a; border-radius:20px; padding:30px 40px; color:#fadf9e; font-family:inherit; font-size:1.3rem; font-weight:bold; cursor:pointer; transition:0.15s; min-width:220px; text-align:center; }
         .mode-btn:hover { background:#262d3a; border-color:#aa8b6e; transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.5); }
         .mode-btn small { display:block; color:#7e8a9a; font-size:0.85rem; margin-top:8px; font-weight:normal; }
+        .nick-row { margin-bottom:30px; display:flex; align-items:center; gap:12px; }
+        .nick-row label { color:#cbad8e; font-size:1.1rem; }
+        #nickInput { background:#10131f; border:2px solid #6b4f3a; border-radius:12px; padding:8px 16px; color:#fadf9e; font-family:inherit; font-size:1.1rem; width:180px; text-align:center; outline:none; }
+        #nickInput:focus { border-color:#aa8b6e; }
 
         /* Game */
         .game-wrapper { width:100%; max-width:min(1200px,95vw,calc((100vh - 150px)/0.6)); padding:10px; display:none; }
@@ -56,6 +60,7 @@
     <div id="startScreen">
         <h1>Dot · Roguelike</h1>
         <h2>点·火柴人 · 肉鸽</h2>
+        <div class="nick-row"><label>昵称:</label><input type="text" id="nickInput" placeholder="Player" maxlength="12"></div>
         <div class="mode-buttons">
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
@@ -108,6 +113,19 @@
 
         let controlMode='keyboard';
         let gameTime=0;
+        let playerNickname='Player';
+        let touchTutorialTimer=0;
+
+        // Leaderboard (top 3 by play duration, localStorage)
+        function getLeaderboard(){try{return JSON.parse(localStorage.getItem('rl_leaderboard'))||[];}catch(e){return[];}}
+        function saveLeaderboard(board){localStorage.setItem('rl_leaderboard',JSON.stringify(board));}
+        function updateLeaderboard(nick,duration){
+            let board=getLeaderboard();board.push({nick,duration,ts:Date.now()});
+            board.sort((a,b)=>b.duration-a.duration);board=board.slice(0,3);saveLeaderboard(board);
+        }
+        function formatDuration(s){let h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60);return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;}
+        // Listen for cross-tab leaderboard updates
+        window.addEventListener('storage',e=>{if(e.key==='rl_leaderboard'){/* board auto-refreshed via getLeaderboard() */}});
 
         // Key mapping
         let keyMap={up:'w',down:'s',left:'a',right:'d',interact:'e',pause:'p'};
@@ -275,7 +293,7 @@
             if(player.isDashing)return;
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
             screenShakeTimer=0.2;screenShakeIntensity=4+Math.min(amount,8);
-            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.5;screenShakeIntensity=15;}
+            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.5;screenShakeIntensity=15;updateLeaderboard(playerNickname,gameTime);}
         }
         function tryDodgeOrDamage(amount){
             if(player.invincibleTimer>0||player.isDashing)return;
@@ -295,7 +313,7 @@
             lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
             worldOffsetX=0;worldOffsetY=0;touchActive=false;leftJoy.active=false;rightJoy.active=false;
-            touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;
+            touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;touchTutorialTimer=controlMode==='touch'?3.0:0;
             updateUI();
         }
 
@@ -452,7 +470,7 @@
             ].sort(()=>Math.random()-0.5).slice(0,3);
         }
         function refreshShop(){if(gameState!==STATE_SHOP)return;let c=10+shopRefreshCount*10;if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
-        function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;}
+        function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;updateUI();}
 
         // ---------- UPDATE ----------
         function updateGame(dt,nowS){
@@ -462,6 +480,7 @@
             if(player.damageFlash>0)player.damageFlash-=dt;
             if(player.dashCooldown>0)player.dashCooldown-=dt;
             if(screenShakeTimer>0)screenShakeTimer-=dt;
+            if(touchTutorialTimer>0)touchTutorialTimer-=dt;
 
             // Dash movement
             if(player.isDashing){
@@ -663,6 +682,17 @@
             ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,30);
             ctx.fillText(`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`,20,50);
 
+            // Leaderboard (top-left, below stats)
+            let lb=getLeaderboard();
+            if(lb.length>0){
+                ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(12,58,200,18+lb.length*18);
+                ctx.font='12px monospace';ctx.fillStyle='#ffd966';ctx.fillText('🏆 排行榜',18,73);
+                for(let i=0;i<lb.length;i++){
+                    let medal=i===0?'🥇':i===1?'🥈':'🥉';
+                    ctx.fillStyle='#cbad8e';ctx.fillText(`${medal} ${lb[i].nick.slice(0,8)} ${formatDuration(lb[i].duration)}`,18,91+i*18);
+                }
+            }
+
             // Floating texts
             for(let ft of floatingTexts){let{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font="bold 20px 'Courier New'";ctx.fillStyle=ft.color;ctx.fillText(ft.text,x-30,y-40-(1-ft.life)*20);ctx.globalAlpha=1.0;}
 
@@ -711,8 +741,8 @@
 
             // Touch mode HUD
             if(controlMode==='touch'&&gameState===STATE_PLAYING){
-                // Pause button
-                ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(W-65,8,55,35);ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='20px monospace';ctx.textAlign='center';ctx.fillText('⏸',W-38,32);ctx.textAlign='left';
+                // Pause button (no background)
+                ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='20px monospace';ctx.textAlign='center';ctx.fillText('⏸',W-38,32);ctx.textAlign='left';
                 // Dash button
                 let dbX=W/2,dbY=H-50,dbR=28;ctx.beginPath();ctx.arc(dbX,dbY,dbR,0,Math.PI*2);
                 if(player.dashCooldown>0){ctx.fillStyle='rgba(100,100,100,0.35)';ctx.fill();let pct=1-player.dashCooldown/DASH_COOLDOWN;ctx.beginPath();ctx.moveTo(dbX,dbY);ctx.arc(dbX,dbY,dbR,-Math.PI/2,-Math.PI/2+pct*Math.PI*2);ctx.closePath();ctx.fillStyle='rgba(100,200,255,0.3)';ctx.fill();}
@@ -725,6 +755,23 @@
                 // Joysticks
                 if(leftJoy.active){ctx.beginPath();ctx.arc(leftJoy.bx,leftJoy.by,JOY_R,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.12)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(leftJoy.kx,leftJoy.ky,JOY_KNOB,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fill();}
                 if(rightJoy.active){ctx.beginPath();ctx.arc(rightJoy.bx,rightJoy.by,JOY_R,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.12)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(rightJoy.kx,rightJoy.ky,JOY_KNOB,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fill();}
+            }
+            // Touch tutorial overlay
+            if(controlMode==='touch'&&touchTutorialTimer>0){
+                let ta=Math.min(1,touchTutorialTimer/0.5);
+                ctx.fillStyle=`rgba(0,0,0,${0.6*ta})`;ctx.fillRect(0,0,W,H);
+                ctx.globalAlpha=ta;
+                // Left joystick hint
+                ctx.beginPath();ctx.arc(W*0.25,H*0.55,50,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=3;ctx.stroke();
+                ctx.beginPath();ctx.arc(W*0.25,H*0.55,18,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
+                ctx.font='bold 22px monospace';ctx.fillStyle='#fadf9e';ctx.textAlign='center';ctx.fillText('← 左: 移动 →',W*0.25,H*0.35);
+                // Right joystick hint
+                ctx.beginPath();ctx.arc(W*0.75,H*0.55,50,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=3;ctx.stroke();
+                ctx.beginPath();ctx.arc(W*0.75,H*0.55,18,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
+                ctx.font='bold 22px monospace';ctx.fillStyle='#fadf9e';ctx.fillText('← 右: 攻击方向 →',W*0.75,H*0.35);
+                // Center tip
+                ctx.font='18px monospace';ctx.fillStyle='#aaaaaa';ctx.fillText('自动射击 · 右摇杆改变方向',W*0.5,H*0.85);
+                ctx.textAlign='left';ctx.globalAlpha=1.0;
             }
             ctx.shadowBlur=0;
         }
@@ -754,7 +801,9 @@
 
         // Start screen
         function startGame(mode){
-            controlMode=mode;startScreen.style.display='none';gameWrapper.style.display=mode==='touch'?'flex':'block';
+            controlMode=mode;
+            let nickEl=document.getElementById('nickInput');playerNickname=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
+            startScreen.style.display='none';gameWrapper.style.display=mode==='touch'?'flex':'block';
             if(mode==='touch'){document.body.classList.add('touch-mode');if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{});if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});}
             resetGame();initEvents();lastTimestamp=0;if(gameLoop)cancelAnimationFrame(gameLoop);gameLoop=requestAnimationFrame(tick);
         }
