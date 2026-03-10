@@ -292,7 +292,7 @@
         const PLAYER_RADIUS=12,BASE_SPEED=220,BASE_MAX_HP=20,BASE_DAMAGE=2.0,BASE_FIRE_INTERVAL=0.28;
         const BASE_BULLET_SPEED=480,BASE_BULLET_COUNT=1,BASE_CRIT_CHANCE=0.05,BASE_CRIT_DAMAGE=1.5;
         const BASE_PIERCING=0,BULLET_SIZE=5,INVINCIBLE_DURATION=0.7;
-        const DODGE_DIMINISH_FACTOR=0.6,SPEED_DIMINISH_FACTOR=0.4;
+        const DODGE_DIMINISH_FACTOR=0.3,SPEED_DIMINISH_FACTOR=0.4,MAX_DODGE_CHANCE=0.65;
         const BASE_EXP_NEXT=100,EXP_INCREASE_PER_LEVEL=70;
 
         // Dash constants
@@ -335,7 +335,7 @@
         // Helpers
         function clamp(v,mn,mx){return Math.min(mx,Math.max(mn,v));}
         function diminishingReturn(lv,f){return 1-1/(1+f*lv);}
-        function getFinalDodge(){return diminishingReturn(player.dodge,DODGE_DIMINISH_FACTOR);}
+        function getFinalDodge(){return Math.min(MAX_DODGE_CHANCE,diminishingReturn(player.dodge,DODGE_DIMINISH_FACTOR));}
         function getFinalSpeed(){let sm=ROLES[selectedRole]?ROLES[selectedRole].spdMult:1;return BASE_SPEED*sm*(1+diminishingReturn(player.speedBonus,SPEED_DIMINISH_FACTOR));}
 
         function findNearestEnemy(){
@@ -509,8 +509,8 @@
         function spawnXpFromEnemy(ex,ey,er,isBoss=false,isElite=false){
             let v=Math.floor(er/2)+2+Math.floor(player.level*0.8);if(isBoss)v*=5;if(isElite)v*=2;
             xpOrbs.push({x:ex,y:ey,radius:isBoss?12:(isElite?8:4+v*0.5),value:v});
-            if(isBoss){let g=30+player.level*10;player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
-            if(isElite){let g=5+player.level*2;player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
+            if(isBoss){let g=30+Math.min(player.level*8,120);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
+            if(isElite){let g=5+Math.min(player.level,12);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
         }
         function spawnChest(now){if(now-lastChestSpawnTime<CHEST_SPAWN_INTERVAL)return;lastChestSpawnTime=now;let a=Math.random()*Math.PI*2,d=300+Math.random()*400;chests.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:18,isOpen:false});}
 
@@ -525,7 +525,7 @@
                 {n:'💥 暴击率+3%',f:()=>{player.critChance=Math.min(0.8,player.critChance+0.03);addFloatingText("暴击+3%",player.x,player.y-30,"#ffdd44");}},
                 {n:'🗡️ 暴击伤害+20%',f:()=>{player.critDamage+=0.2;addFloatingText("爆伤+20%",player.x,player.y-30,"#ffaa00");}},
                 {n:'🎯 穿透+1',f:()=>{player.piercing+=1;addFloatingText("穿透+1",player.x,player.y-30,"#aaccff");}},
-                {n:'💰 50金币',f:()=>{player.gold+=50;addFloatingText("+50金币",player.x,player.y-30,"#ffd966");}},
+                {n:'💰 金币',f:()=>{let g=20+player.level*5;player.gold+=g;addFloatingText(`+${g}金币`,player.x,player.y-30,"#ffd966");}},
                 {n:'💖 最大生命+10',f:()=>{player.maxHp+=10;player.hp+=10;addFloatingText("生命上限+10",player.x,player.y-30,"#ff8888");}},
                 {n:'👟 速度+1',f:()=>{player.speedBonus+=1;addFloatingText("速度提升",player.x,player.y-30,"#88ff88");}},
                 {n:'🌀 闪避+1',f:()=>{player.dodge+=1;addFloatingText("闪避提升",player.x,player.y-30,"#88aaff");}},
@@ -573,17 +573,18 @@
         function checkLevelUp(){if(player.exp>=player.nextExp&&gameState===STATE_PLAYING){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}}
 
         // Shop
+        function shopPrice(base){return Math.floor(base*(1+Math.floor(player.level/3)*0.4));}
         function generateShopItems(){
-            return[{name:'❤️ 回血50%',price:30,effect:()=>{player.hp=Math.min(player.maxHp,player.hp+player.maxHp*0.5);}},
-                {name:'💪 攻击力+2',price:40,effect:()=>{player.damage+=2;}},{name:'🏹 子弹数+1',price:50,effect:()=>{player.bulletCount=Math.min(10,player.bulletCount+1);}},
-                {name:'⚡ 攻速提升',price:45,effect:()=>{player.fireInterval=Math.max(0.08,player.fireInterval-0.04);}},
-                {name:'💥 暴击率+5%',price:40,effect:()=>{player.critChance=Math.min(0.8,player.critChance+0.05);}},
-                {name:'🗡️ 暴击伤害+30%',price:50,effect:()=>{player.critDamage+=0.3;}},
-                {name:'🎯 穿透+1',price:35,effect:()=>{player.piercing+=1;}},
-                {name:'💖 最大生命+15',price:40,effect:()=>{player.maxHp+=15;player.hp+=15;}}
+            return[{name:'❤️ 回血50%',price:shopPrice(30),effect:()=>{player.hp=Math.min(player.maxHp,player.hp+player.maxHp*0.5);}},
+                {name:'💪 攻击力+2',price:shopPrice(45),effect:()=>{player.damage+=2;}},{name:'🏹 子弹数+1',price:shopPrice(60),effect:()=>{player.bulletCount=Math.min(10,player.bulletCount+1);}},
+                {name:'⚡ 攻速提升',price:shopPrice(50),effect:()=>{player.fireInterval=Math.max(0.08,player.fireInterval-0.04);}},
+                {name:'💥 暴击率+5%',price:shopPrice(45),effect:()=>{player.critChance=Math.min(0.8,player.critChance+0.05);}},
+                {name:'🗡️ 暴击伤害+30%',price:shopPrice(55),effect:()=>{player.critDamage+=0.3;}},
+                {name:'🎯 穿透+1',price:shopPrice(40),effect:()=>{player.piercing+=1;}},
+                {name:'💖 最大生命+15',price:shopPrice(45),effect:()=>{player.maxHp+=15;player.hp+=15;}}
             ].sort(()=>Math.random()-0.5).slice(0,3);
         }
-        function refreshShop(){if(gameState!==STATE_SHOP)return;let c=10+shopRefreshCount*10;if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
+        function refreshShop(){if(gameState!==STATE_SHOP)return;let c=shopPrice(10)+shopRefreshCount*shopPrice(10);if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
         function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;updateUI();}
 
         // ---------- UPDATE ----------
