@@ -276,7 +276,7 @@
             const pX=200,pY=150,pW=600;
             if(gameState===STATE_UPGRADE&&upgradeOptions.length===3){for(let i=0;i<3;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){applyUpgrade(i);return;}}}
             if(gameState===STATE_SHOP){for(let i=0;i<3;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){buyShopItem(i);return;}}if(tx>=pX+60&&tx<=pX+200&&ty>=pY+280&&ty<=pY+320){refreshShop();return;}if(tx>=pX+350&&tx<=pX+500&&ty>=pY+280&&ty<=pY+320){gameState=STATE_PLAYING;return;}}
-            if(gameState===STATE_GAMEOVER){resetGame();return;}
+            if(gameState===STATE_GAMEOVER){backToMenu();return;}
             if(gameState===STATE_PAUSED){gameState=STATE_PLAYING;return;}
         }
         canvas.addEventListener('touchstart',handleJoyTouchStart,{passive:false});
@@ -974,7 +974,15 @@
                 else{keys[k]=true;e.preventDefault();}
             });
             window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
-            restartBtn.addEventListener('click',()=>{checkUnlocks();buildRoleSelect();resetGame();});
+            restartBtn.addEventListener('click',backToMenu);
+        }
+
+        // Back to menu (keep nickname, refresh unlocks)
+        function backToMenu(){
+            checkUnlocks();buildRoleSelect();
+            gameWrapper.style.display='none';startScreen.style.display='flex';
+            document.body.classList.remove('touch-mode');
+            if(gameLoop){cancelAnimationFrame(gameLoop);gameLoop=null;}
         }
 
         // Start screen
