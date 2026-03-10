@@ -116,32 +116,35 @@
         let playerNickname='Player';
         let showTouchTutorial=false;
 
-        // Live session-based leaderboard (top 3 by current play duration)
+        // Live session-based leaderboard via Supabase
         const sessionId=Date.now()+'_'+Math.random().toString(36).slice(2,8);
-        let lastLBWrite=0;
+        const SB_URL='https://ljlsruiydrsxetamtptm.supabase.co/rest/v1';
+        const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNydWl5ZHJzeGV0YW10cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMjkzMjgsImV4cCI6MjA4ODcwNTMyOH0.3jofw4NPGiKgoVq6WZNQsU9o8Xv1n_nd07ZKYX-O3dU';
+        let lastLBSync=0,cachedLeaderboard=[];
         function formatDuration(s){let m=Math.floor(s/60),sec=Math.floor(s%60);return `${m}:${sec.toString().padStart(2,'0')}`;}
-        function writeLiveSession(){
-            let now=Date.now();if(now-lastLBWrite<1000)return;lastLBWrite=now;
-            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
-            // Clean stale sessions (>5s no update)
-            for(let id in sessions){if(now-sessions[id].ts>5000)delete sessions[id];}
-            sessions[sessionId]={nick:playerNickname,duration:gameTime,ts:now};
-            localStorage.setItem('rl_sessions',JSON.stringify(sessions));
+        function syncLeaderboard(){
+            let now=Date.now();if(now-lastLBSync<2000)return;lastLBSync=now;
+            // Upsert current session
+            fetch(SB_URL+'/live_sessions',{method:'POST',
+                headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+                body:JSON.stringify({session_id:sessionId,nick:playerNickname,duration:Math.round(gameTime*10)/10,updated_at:new Date().toISOString()})
+            }).catch(()=>{});
+            // Fetch top 3 active sessions (updated within last 10s)
+            let cutoff=new Date(now-10000).toISOString();
+            fetch(SB_URL+'/live_sessions?select=session_id,nick,duration&updated_at=gte.'+encodeURIComponent(cutoff)+'&order=duration.desc&limit=3',
+                {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}
+            ).then(r=>r.json()).then(data=>{if(Array.isArray(data))cachedLeaderboard=data;}).catch(()=>{});
         }
         function getLiveLeaderboard(){
-            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
-            let now=Date.now(),entries=[];
-            for(let id in sessions){
-                if(now-sessions[id].ts>5000)continue;
-                // For current session, use live gameTime
-                if(id===sessionId){entries.push({nick:playerNickname,duration:gameTime});}
-                else{entries.push(sessions[id]);}
-            }
-            entries.sort((a,b)=>b.duration-a.duration);return entries.slice(0,3);
+            // Overlay live gameTime for current session
+            let lb=cachedLeaderboard.map(e=>e.session_id===sessionId?{...e,duration:gameTime}:e);
+            // Ensure current session is included
+            if(!lb.find(e=>e.session_id===sessionId)){lb.push({session_id:sessionId,nick:playerNickname,duration:gameTime});}
+            lb.sort((a,b)=>b.duration-a.duration);return lb.slice(0,3);
         }
         function removeLiveSession(){
-            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
-            delete sessions[sessionId];localStorage.setItem('rl_sessions',JSON.stringify(sessions));
+            fetch(SB_URL+'/live_sessions?session_id=eq.'+sessionId,{method:'DELETE',
+                headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},keepalive:true}).catch(()=>{});
         }
         window.addEventListener('beforeunload',removeLiveSession);
 
@@ -797,8 +800,8 @@
             if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
             if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
-            // Always write live session for leaderboard
-            writeLiveSession();
+            // Sync leaderboard with Supabase
+            syncLeaderboard();
             draw();requestAnimationFrame(tick);
         }
 
