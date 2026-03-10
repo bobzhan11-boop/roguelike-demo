@@ -300,7 +300,7 @@
 
         // Boss types
         const BOSS_TYPES={
-            berserker:{name:'狂战士',color:'#cc2222',glow:'#ff4444',speedMult:1.8,healthMult:1.3,radiusMult:1.3,contactDamage:8,attackInterval:3.0},
+            berserker:{name:'狂战士',color:'#804808',glow:'#a06010',speedMult:1.8,healthMult:1.3,radiusMult:1.3,contactDamage:8,attackInterval:3.0},
             ranger:{name:'游侠',color:'#22aa55',glow:'#44ff88',speedMult:0.7,healthMult:1.0,radiusMult:0.9,contactDamage:3,attackInterval:1.8},
             sorcerer:{name:'巫师',color:'#7744cc',glow:'#aa66ff',speedMult:0.5,healthMult:0.9,radiusMult:1.0,contactDamage:4,attackInterval:2.5},
         };
@@ -442,7 +442,9 @@
             timeSpan.textContent=`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
         function addFloatingText(text,x,y,color="#ffd966"){floatingTexts.push({text,x,y,life:1.0,color});}
-        function getMonsterStatsByLevel(){return{healthMult:1+player.level*0.12,speedMult:Math.min(2.2,1+player.level*0.08)};}
+        function getMonsterStatsByLevel(){return{healthMult:1+player.level*0.18,speedMult:Math.min(2.5,1+player.level*0.12),dmgMult:1+player.level*0.1};}
+        function getEliteStatScale(){return{healthMult:1+player.level*0.25,speedMult:Math.min(2.8,1+player.level*0.15),dmgMult:1+player.level*0.15};}
+        function getBossStatScale(){return{healthMult:1+player.level*0.3,speedMult:Math.min(3.0,1+player.level*0.18),dmgMult:1+player.level*0.2};}
 
         // Spawn enemy with type variety
         function spawnEnemy(now){
@@ -476,7 +478,8 @@
         function spawnElite(now){
             if(killCount>=30*(eliteKillCount+1)){
                 eliteKillCount++;let n=1+Math.floor(player.level/3);
-                for(let i=0;i<n;i++){let r=18+Math.random()*8,hp=15+player.level*5+Math.floor(difficultyTimer),spd=35+player.level*1.5;
+                let es=getEliteStatScale();
+                for(let i=0;i<n;i++){let r=18+Math.random()*8,hp=Math.floor((15+player.level*5+Math.floor(difficultyTimer))*es.healthMult),spd=(35+player.level*1.5)*es.speedMult;
                     let a=Math.random()*Math.PI*2,d=400+Math.random()*200;
                     elites.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isElite:true,isBoss:false});}
                 addFloatingText(`⚡ 精英出现 x${n}`,player.x,player.y-60,"#ffaa55");
@@ -489,8 +492,9 @@
         }
         function spawnBoss(now){
             const tks=['berserker','ranger','sorcerer'],tk=tks[Math.floor(Math.random()*tks.length)],bt=BOSS_TYPES[tk];
-            let r=(35+Math.random()*15)*bt.radiusMult,hp=Math.floor((80+player.level*30+difficultyTimer*2)*bt.healthMult);
-            let spd=(30+player.level*1.5)*bt.speedMult,a=Math.random()*Math.PI*2;
+            let bsc=getBossStatScale();
+            let r=(35+Math.random()*15)*bt.radiusMult,hp=Math.floor((80+player.level*30+difficultyTimer*2)*bt.healthMult*bsc.healthMult);
+            let spd=(30+player.level*1.5)*bt.speedMult*bsc.speedMult,a=Math.random()*Math.PI*2;
             let x=player.x+Math.cos(a)*500,y=player.y+Math.sin(a)*500;
             bosses.push({x,y,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:true,bossType:tk,
                 attackTimer:0,attackInterval:bt.attackInterval,contactDamage:bt.contactDamage,
@@ -502,17 +506,19 @@
         // Boss attacks
         function rangerBossShoot(boss){
             let dx=player.x-boss.x,dy=player.y-boss.y,ba=Math.atan2(dy,dx);
-            for(let i=0;i<5;i++){let a=ba+(i/4-0.5)*0.7;bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*220,vy:Math.sin(a)*220,radius:6,damage:2,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true});}
+            let bd=Math.floor(2*getBossStatScale().dmgMult);
+            for(let i=0;i<5;i++){let a=ba+(i/4-0.5)*0.7;bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*220,vy:Math.sin(a)*220,radius:6,damage:bd,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true});}
         }
         function sorcererBossAttack(boss){
             boss.attackPhase=(boss.attackPhase||0)+1;
-            if(boss.attackPhase%2===1){magicZones.push({x:player.x,y:player.y,radius:70,warningTime:1.2,activeTime:0.6,damage:4,phase:'warning',timer:0});addFloatingText("✨ 魔法区域!",player.x,player.y-30,"#aa66ff");}
-            else{for(let i=0;i<8;i++){let a=(i/8)*Math.PI*2;bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*160,vy:Math.sin(a)*160,radius:7,damage:3,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true});}}
+            let sd=getBossStatScale().dmgMult;
+            if(boss.attackPhase%2===1){magicZones.push({x:player.x,y:player.y,radius:70,warningTime:1.2,activeTime:0.6,damage:Math.floor(4*sd),phase:'warning',timer:0});addFloatingText("✨ 魔法区域!",player.x,player.y-30,"#aa66ff");}
+            else{let bd2=Math.floor(3*sd);for(let i=0;i<8;i++){let a=(i/8)*Math.PI*2;bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*160,vy:Math.sin(a)*160,radius:7,damage:bd2,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true});}}
         }
 
         function spawnXpFromEnemy(ex,ey,er,isBoss=false,isElite=false){
             let v=Math.floor(er/2)+2+Math.floor(player.level*0.8);if(isBoss)v*=5;if(isElite)v*=2;
-            xpOrbs.push({x:ex,y:ey,radius:isBoss?12:(isElite?8:4+v*0.5),value:v});
+            xpOrbs.push({x:ex,y:ey,radius:isBoss?14:(isElite?10:Math.min(7,3.8+v*0.475)),value:v});
             if(isBoss){let g=30+Math.min(player.level*8,120);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
             if(isElite){let g=5+Math.min(player.level,12);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
         }
@@ -651,7 +657,7 @@
                     if(dist>pref+30&&dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
                     else if(dist<pref-30&&dist>0.01){let mv=e.speed*dt*0.5;e.x-=(dx/dist)*mv;e.y-=(dy/dist)*mv;}
                     e.attackTimer=(e.attackTimer||0)+dt;
-                    if(e.attackTimer>=2.0&&dist>0.01){e.attackTimer=0;bullets.push({x:e.x,y:e.y,vx:(dx/dist)*150,vy:(dy/dist)*150,radius:4,damage:1,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}
+                    if(e.attackTimer>=2.0&&dist>0.01){e.attackTimer=0;let sd=Math.floor(1*getMonsterStatsByLevel().dmgMult);bullets.push({x:e.x,y:e.y,vx:(dx/dist)*150,vy:(dy/dist)*150,radius:4,damage:sd,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}
                 }else{
                     if(dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
                 }
@@ -748,19 +754,20 @@
                 if(dist<md){
                     if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}
                     if(player.thorns>0){e.health-=player.thorns;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;continue;}}
+                    let eDmgScale=getMonsterStatsByLevel().dmgMult;
                     if(e.type==='exploder'){
-                        tryDodgeOrDamage(Math.max(3,Math.floor(e.radius)));
+                        tryDodgeOrDamage(Math.floor(Math.max(3,Math.floor(e.radius))*eDmgScale));
                         addFloatingText("💥",e.x,e.y,"#ff8800");screenShakeTimer=0.15;screenShakeIntensity=6;
                         spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
-                    }else{tryDodgeOrDamage(Math.max(1,Math.floor(e.radius/5)));}
+                    }else{tryDodgeOrDamage(Math.floor(Math.max(1,Math.floor(e.radius/5))*eDmgScale));}
                 }
             }
             // Player vs elites
             for(let e of elites){let dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy),md=player.radius+e.radius;
-                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}tryDodgeOrDamage(Math.max(2,Math.floor(e.radius/4)));}}
+                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}tryDodgeOrDamage(Math.floor(Math.max(2,Math.floor(e.radius/4))*getEliteStatScale().dmgMult));}}
             // Player vs bosses
             for(let bs of bosses){let dx=player.x-bs.x,dy=player.y-bs.y,dist=Math.hypot(dx,dy),md=player.radius+bs.radius;
-                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.4;player.y+=Math.sin(a)*ov*0.4;}tryDodgeOrDamage(bs.contactDamage);}}
+                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.4;player.y+=Math.sin(a)*ov*0.4;}tryDodgeOrDamage(Math.floor(bs.contactDamage*getBossStatScale().dmgMult));}}
 
             // Floating texts
             for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
