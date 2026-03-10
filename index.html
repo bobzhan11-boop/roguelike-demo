@@ -114,7 +114,7 @@
         let controlMode='keyboard';
         let gameTime=0;
         let playerNickname='Player';
-        let touchTutorialTimer=0;
+        let showTouchTutorial=false;
 
         // Leaderboard (top 3 by play duration, localStorage)
         function getLeaderboard(){try{return JSON.parse(localStorage.getItem('rl_leaderboard'))||[];}catch(e){return[];}}
@@ -174,6 +174,7 @@
 
         function handleJoyTouchStart(e){
             e.preventDefault();if(controlMode!=='touch')return;
+            if(showTouchTutorial){showTouchTutorial=false;return;}
             if(gameState===STATE_UPGRADE||gameState===STATE_SHOP||gameState===STATE_GAMEOVER||gameState===STATE_PAUSED){
                 const t=e.changedTouches[0];if(t){const p=canvasTouchCoords(t);handleScreenTap(p.x,p.y);}return;
             }
@@ -313,7 +314,7 @@
             lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
             worldOffsetX=0;worldOffsetY=0;touchActive=false;leftJoy.active=false;rightJoy.active=false;
-            touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;touchTutorialTimer=controlMode==='touch'?3.0:0;
+            touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;showTouchTutorial=controlMode==='touch';
             updateUI();
         }
 
@@ -480,7 +481,6 @@
             if(player.damageFlash>0)player.damageFlash-=dt;
             if(player.dashCooldown>0)player.dashCooldown-=dt;
             if(screenShakeTimer>0)screenShakeTimer-=dt;
-            if(touchTutorialTimer>0)touchTutorialTimer-=dt;
 
             // Dash movement
             if(player.isDashing){
@@ -684,14 +684,10 @@
 
             // Leaderboard (top-left, below stats)
             let lb=getLeaderboard();
-            if(lb.length>0){
-                ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(12,58,200,18+lb.length*18);
-                ctx.font='12px monospace';ctx.fillStyle='#ffd966';ctx.fillText('🏆 排行榜',18,73);
-                for(let i=0;i<lb.length;i++){
-                    let medal=i===0?'🥇':i===1?'🥈':'🥉';
-                    ctx.fillStyle='#cbad8e';ctx.fillText(`${medal} ${lb[i].nick.slice(0,8)} ${formatDuration(lb[i].duration)}`,18,91+i*18);
-                }
-            }
+            ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(12,58,210,22+(lb.length>0?lb.length*18:18));
+            ctx.font='12px monospace';ctx.fillStyle='#ffd966';ctx.fillText('🏆 排行榜 Top 3',18,73);
+            if(lb.length>0){for(let i=0;i<lb.length;i++){let medal=i===0?'🥇':i===1?'🥈':'🥉';ctx.fillStyle='#cbad8e';ctx.fillText(`${medal} ${lb[i].nick.slice(0,8)} ${formatDuration(lb[i].duration)}`,18,91+i*18);}}
+            else{ctx.fillStyle='#666';ctx.fillText('暂无记录',18,91);}
 
             // Floating texts
             for(let ft of floatingTexts){let{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font="bold 20px 'Courier New'";ctx.fillStyle=ft.color;ctx.fillText(ft.text,x-30,y-40-(1-ft.life)*20);ctx.globalAlpha=1.0;}
@@ -756,11 +752,9 @@
                 if(leftJoy.active){ctx.beginPath();ctx.arc(leftJoy.bx,leftJoy.by,JOY_R,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.12)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(leftJoy.kx,leftJoy.ky,JOY_KNOB,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fill();}
                 if(rightJoy.active){ctx.beginPath();ctx.arc(rightJoy.bx,rightJoy.by,JOY_R,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.12)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(rightJoy.kx,rightJoy.ky,JOY_KNOB,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fill();}
             }
-            // Touch tutorial overlay
-            if(controlMode==='touch'&&touchTutorialTimer>0){
-                let ta=Math.min(1,touchTutorialTimer/0.5);
-                ctx.fillStyle=`rgba(0,0,0,${0.6*ta})`;ctx.fillRect(0,0,W,H);
-                ctx.globalAlpha=ta;
+            // Touch tutorial overlay (tap to dismiss)
+            if(controlMode==='touch'&&showTouchTutorial){
+                ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
                 // Left joystick hint
                 ctx.beginPath();ctx.arc(W*0.25,H*0.55,50,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=3;ctx.stroke();
                 ctx.beginPath();ctx.arc(W*0.25,H*0.55,18,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
@@ -769,9 +763,10 @@
                 ctx.beginPath();ctx.arc(W*0.75,H*0.55,50,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=3;ctx.stroke();
                 ctx.beginPath();ctx.arc(W*0.75,H*0.55,18,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
                 ctx.font='bold 22px monospace';ctx.fillStyle='#fadf9e';ctx.fillText('← 右: 攻击方向 →',W*0.75,H*0.35);
-                // Center tip
-                ctx.font='18px monospace';ctx.fillStyle='#aaaaaa';ctx.fillText('自动射击 · 右摇杆改变方向',W*0.5,H*0.85);
-                ctx.textAlign='left';ctx.globalAlpha=1.0;
+                // Center tips
+                ctx.font='18px monospace';ctx.fillStyle='#aaaaaa';ctx.fillText('自动射击 · 右摇杆改变方向',W*0.5,H*0.8);
+                let blink=0.5+0.5*Math.sin(Date.now()/300);ctx.fillStyle=`rgba(255,223,158,${blink})`;ctx.font='bold 20px monospace';ctx.fillText('点击屏幕开始',W*0.5,H*0.92);
+                ctx.textAlign='left';
             }
             ctx.shadowBlur=0;
         }
