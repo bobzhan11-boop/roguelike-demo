@@ -116,16 +116,34 @@
         let playerNickname='Player';
         let showTouchTutorial=false;
 
-        // Leaderboard (top 3 by play duration, localStorage)
-        function getLeaderboard(){try{return JSON.parse(localStorage.getItem('rl_leaderboard'))||[];}catch(e){return[];}}
-        function saveLeaderboard(board){localStorage.setItem('rl_leaderboard',JSON.stringify(board));}
-        function updateLeaderboard(nick,duration){
-            let board=getLeaderboard();board.push({nick,duration,ts:Date.now()});
-            board.sort((a,b)=>b.duration-a.duration);board=board.slice(0,3);saveLeaderboard(board);
+        // Live session-based leaderboard (top 3 by current play duration)
+        const sessionId=Date.now()+'_'+Math.random().toString(36).slice(2,8);
+        let lastLBWrite=0;
+        function formatDuration(s){let m=Math.floor(s/60),sec=Math.floor(s%60);return `${m}:${sec.toString().padStart(2,'0')}`;}
+        function writeLiveSession(){
+            let now=Date.now();if(now-lastLBWrite<1000)return;lastLBWrite=now;
+            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
+            // Clean stale sessions (>5s no update)
+            for(let id in sessions){if(now-sessions[id].ts>5000)delete sessions[id];}
+            sessions[sessionId]={nick:playerNickname,duration:gameTime,ts:now};
+            localStorage.setItem('rl_sessions',JSON.stringify(sessions));
         }
-        function formatDuration(s){let h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60);return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;}
-        // Listen for cross-tab leaderboard updates
-        window.addEventListener('storage',e=>{if(e.key==='rl_leaderboard'){/* board auto-refreshed via getLeaderboard() */}});
+        function getLiveLeaderboard(){
+            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
+            let now=Date.now(),entries=[];
+            for(let id in sessions){
+                if(now-sessions[id].ts>5000)continue;
+                // For current session, use live gameTime
+                if(id===sessionId){entries.push({nick:playerNickname,duration:gameTime});}
+                else{entries.push(sessions[id]);}
+            }
+            entries.sort((a,b)=>b.duration-a.duration);return entries.slice(0,3);
+        }
+        function removeLiveSession(){
+            let sessions={};try{sessions=JSON.parse(localStorage.getItem('rl_sessions')||'{}');}catch(e){}
+            delete sessions[sessionId];localStorage.setItem('rl_sessions',JSON.stringify(sessions));
+        }
+        window.addEventListener('beforeunload',removeLiveSession);
 
         // Key mapping
         let keyMap={up:'w',down:'s',left:'a',right:'d',interact:'e',pause:'p'};
@@ -294,7 +312,7 @@
             if(player.isDashing)return;
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
             screenShakeTimer=0.2;screenShakeIntensity=4+Math.min(amount,8);
-            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.5;screenShakeIntensity=15;updateLeaderboard(playerNickname,gameTime);}
+            if(player.hp<=0){gameState=STATE_GAMEOVER;screenShakeTimer=0.5;screenShakeIntensity=15;}
         }
         function tryDodgeOrDamage(amount){
             if(player.invincibleTimer>0||player.isDashing)return;
@@ -594,7 +612,7 @@
 
             // Floating texts
             for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
-            checkLevelUp();updateUI();
+            checkLevelUp();updateUI();writeLiveSession();
         }
 
         // ---------- DRAW ----------
@@ -677,17 +695,10 @@
                 ctx.strokeStyle='rgba(100,200,255,0.5)';ctx.lineWidth=2;ctx.stroke();
             }
 
-            // Stats
+            // Stats (below leaderboard area)
             ctx.fillStyle="#ffffffcc";ctx.font="14px monospace";
-            ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,30);
-            ctx.fillText(`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`,20,50);
-
-            // Leaderboard (top-left, below stats)
-            let lb=getLeaderboard();
-            ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(12,58,210,22+(lb.length>0?lb.length*18:18));
-            ctx.font='12px monospace';ctx.fillStyle='#ffd966';ctx.fillText('🏆 排行榜 Top 3',18,73);
-            if(lb.length>0){for(let i=0;i<lb.length;i++){let medal=i===0?'🥇':i===1?'🥈':'🥉';ctx.fillStyle='#cbad8e';ctx.fillText(`${medal} ${lb[i].nick.slice(0,8)} ${formatDuration(lb[i].duration)}`,18,91+i*18);}}
-            else{ctx.fillStyle='#666';ctx.fillText('暂无记录',18,91);}
+            ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,100);
+            ctx.fillText(`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`,20,118);
 
             // Floating texts
             for(let ft of floatingTexts){let{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font="bold 20px 'Courier New'";ctx.fillStyle=ft.color;ctx.fillText(ft.text,x-30,y-40-(1-ft.life)*20);ctx.globalAlpha=1.0;}
@@ -734,6 +745,13 @@
             for(let c of chests){if(c.isOpen)continue;let mx=mmX+mmW/2+(c.x-player.x)*mmScale,my=mmY+mmH/2+(c.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#00ccaa';ctx.fillRect(mx-2,my-2,4,4);}}
             // Player dot on minimap
             ctx.fillStyle='#ffffff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);
+
+            // Live leaderboard (top-left, no shake)
+            let lb=getLiveLeaderboard();
+            ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(8,8,185,22+(lb.length>0?lb.length*18:18));
+            ctx.font='12px monospace';ctx.fillStyle='#ffd966';ctx.fillText('🏆 排行榜 Top 3',14,23);
+            if(lb.length>0){for(let i=0;i<lb.length;i++){let medal=i===0?'🥇':i===1?'🥈':'🥉';ctx.fillStyle='#cbad8e';ctx.fillText(`${medal} ${lb[i].nick.slice(0,8)} ${formatDuration(lb[i].duration)}`,14,41+i*18);}}
+            else{ctx.fillStyle='#666';ctx.fillText('暂无记录',14,41);}
 
             // Touch mode HUD
             if(controlMode==='touch'&&gameState===STATE_PLAYING){
