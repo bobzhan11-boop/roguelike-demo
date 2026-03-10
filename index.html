@@ -612,7 +612,7 @@
 
             // Floating texts
             for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
-            checkLevelUp();updateUI();writeLiveSession();
+            checkLevelUp();updateUI();
         }
 
         // ---------- DRAW ----------
@@ -793,7 +793,12 @@
         function tick(now){
             if(!lastTimestamp){lastTimestamp=now;requestAnimationFrame(tick);return;}
             const dt=Math.min(0.05,(now-lastTimestamp)/1000);lastTimestamp=now;
-            if(gameState!==STATE_PAUSED)updateGame(dt,now/1000);
+            // Pause game while tutorial is showing
+            if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            // Decay screen shake even outside STATE_PLAYING (so death shake stops)
+            if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
+            // Always write live session for leaderboard
+            writeLiveSession();
             draw();requestAnimationFrame(tick);
         }
 
