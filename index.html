@@ -73,7 +73,7 @@
         <div class="nick-row"><label>昵称:</label><input type="text" id="nickInput" placeholder="Player" maxlength="12"></div>
         <div class="role-select" id="roleSelect"></div>
         <div id="permUpgradeSection" style="margin:10px 0;max-width:600px;width:100%">
-            <div style="color:#ffd966;font-size:14px;margin-bottom:6px">🏛 永久强化 <span id="permGoldDisplay" style="color:#ffcc44"></span></div>
+            <div style="color:#b366ff;font-size:14px;margin-bottom:6px">🔮 灵魂石强化 <span id="permGoldDisplay" style="color:#b366ff"></span></div>
             <div id="permUpgradeList" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center"></div>
         </div>
         <div class="mode-buttons">
@@ -176,7 +176,7 @@
         let playerZones=[],clones=[];
 
         // Meta stats (persisted in localStorage for unlock tracking)
-        let metaStats={totalKills:0,totalBossKills:0,bestTime:0,totalGold:0};
+        let metaStats={totalKills:0,totalBossKills:0,bestTime:0,soulStones:0};
         function loadMeta(){try{let s=localStorage.getItem('rl_meta');if(s)metaStats={...metaStats,...JSON.parse(s)};}catch(e){}}
         function saveMeta(){localStorage.setItem('rl_meta',JSON.stringify(metaStats));}
         function checkUnlocks(){for(let k in ROLES){let r=ROLES[k];if(r.locked&&r.unlockKey&&metaStats[r.unlockKey]>=r.unlockVal)r.locked=false;}}
@@ -195,19 +195,19 @@
         function savePerms(){localStorage.setItem('rl_perms',JSON.stringify(permLevels));}
         function buyPerm(idx){
             let u=PERM_UPGRADES[idx],lv=permLevels[u.key]||0;if(lv>=u.max)return false;
-            let c=u.cost(lv);if(metaStats.totalGold<c)return false;
-            metaStats.totalGold-=c;permLevels[u.key]=(lv||0)+1;savePerms();saveMeta();return true;
+            let c=u.cost(lv);if(metaStats.soulStones<c)return false;
+            metaStats.soulStones-=c;permLevels[u.key]=(lv||0)+1;savePerms();saveMeta();return true;
         }
         loadMeta();loadPerms();checkUnlocks();
 
         function buildPermUpgrades(){
             let el=document.getElementById('permUpgradeList');el.innerHTML='';
-            document.getElementById('permGoldDisplay').textContent=`(💰 ${metaStats.totalGold||0})`;
+            document.getElementById('permGoldDisplay').textContent=`(🔮 ${metaStats.soulStones||0})`;
             PERM_UPGRADES.forEach((u,idx)=>{
                 let lv=permLevels[u.key]||0,maxed=lv>=u.max,cost=maxed?'MAX':u.cost(lv);
                 let btn=document.createElement('button');
-                btn.style.cssText='background:#1a2a3a;color:#ddd;border:1px solid '+(maxed?'#446':'#ffd966')+';padding:4px 8px;border-radius:6px;font-size:12px;cursor:'+(maxed?'default':'pointer')+';min-width:90px;';
-                btn.innerHTML=`${u.name} <span style="color:#aaa">${lv}/${u.max}</span><br><span style="color:#888;font-size:10px">${u.desc}</span><br><span style="color:#ffd966">${maxed?'已满':cost+'💰'}</span>`;
+                btn.style.cssText='background:#1a1a2e;color:#ddd;border:1px solid '+(maxed?'#446':'#b366ff')+';padding:4px 8px;border-radius:6px;font-size:12px;cursor:'+(maxed?'default':'pointer')+';min-width:90px;';
+                btn.innerHTML=`${u.name} <span style="color:#aaa">${lv}/${u.max}</span><br><span style="color:#888;font-size:10px">${u.desc}</span><br><span style="color:#b366ff">${maxed?'已满':cost+'🔮'}</span>`;
                 if(!maxed)btn.addEventListener('click',()=>{if(buyPerm(idx)){buildPermUpgrades();}});
                 el.appendChild(btn);
             });
@@ -486,7 +486,9 @@
             if(player.hp<=0){
                 gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;
                 metaStats.totalKills+=killCount;metaStats.totalBossKills+=bossKillCount;
-                metaStats.totalGold+=player.gold;
+                let earnedSouls=Math.floor(gameTime/60)*3+player.level*1+bossKillCount*5;
+                metaStats.soulStones+=earnedSouls;
+                addFloatingText(`+${earnedSouls} 🔮灵魂石`,player.x,player.y-60,'#b366ff');
                 if(gameTime>metaStats.bestTime)metaStats.bestTime=gameTime;
                 saveMeta();
             }
