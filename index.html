@@ -742,6 +742,7 @@
         }
         function applyUpgrade(i){
             if(i<0||i>=upgradeOptions.length)return;const old=player.nextExp;upgradeOptions[i].apply(player);
+            player.damage*=1.02; // +2% damage per level
             player.level++;player.exp-=old;player.nextExp=Math.floor(BASE_EXP_NEXT+player.level*EXP_INCREASE_PER_LEVEL);upgradeOptions=[];
             if(player.exp>=player.nextExp){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}else gameState=STATE_PLAYING;updateUI();
         }
