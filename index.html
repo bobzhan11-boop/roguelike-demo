@@ -434,7 +434,7 @@
 
         // Skill upgrade system (from boss kills only)
         const MAX_SKILL_LEVEL=5;
-        let skillLevel=0,skillUpOptions=[];
+        let skillLevel=0,skillUpOptions=[],stateInputCooldown=0;
         let SKILL_MODS={whirlwindRange:0,whirlwindDmgMult:0,whirlwindCDReduce:0,whirlwindKnockback:0,
             arrowRainRadius:0,arrowRainDmgMult:0,arrowRainDuration:0,arrowRainCDReduce:0,
             frostNovaRange:0,frostNovaDuration:0,frostNovaCDReduce:0,frostNovaDot:0,
@@ -473,7 +473,7 @@
         function applySkillUpgrade(i){
             if(i<0||i>=skillUpOptions.length)return;
             skillUpOptions[i].apply();skillLevel++;
-            skillUpOptions=[];gameState=STATE_SHOP;
+            skillUpOptions=[];gameState=STATE_SHOP;stateInputCooldown=0.15;
         }
 
         function damagePlayer(amount){
@@ -1228,6 +1228,7 @@
             if(!lastTimestamp){lastTimestamp=now;requestAnimationFrame(tick);return;}
             const dt=Math.min(0.05,(now-lastTimestamp)/1000);lastTimestamp=now;
             // Pause game while tutorial is showing
+            if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
@@ -1247,7 +1248,7 @@
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_UPGRADE){if(k==='1')applyUpgrade(0);if(k==='2')applyUpgrade(1);if(k==='3')applyUpgrade(2);e.preventDefault();}
-                else if(gameState===STATE_SHOP){if(k==='1')buyShopItem(0);if(k==='2')buyShopItem(1);if(k==='3')buyShopItem(2);if(k==='r')refreshShop();e.preventDefault();}
+                else if(gameState===STATE_SHOP){if(stateInputCooldown>0){e.preventDefault();}else{if(k==='1')buyShopItem(0);if(k==='2')buyShopItem(1);if(k==='3')buyShopItem(2);if(k==='r')refreshShop();e.preventDefault();}}
                 else{keys[k]=true;e.preventDefault();}
             });
             window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
