@@ -72,6 +72,10 @@
         <h2>点·火柴人 · 肉鸽</h2>
         <div class="nick-row"><label>昵称:</label><input type="text" id="nickInput" placeholder="Player" maxlength="12"></div>
         <div class="role-select" id="roleSelect"></div>
+        <div id="permUpgradeSection" style="margin:10px 0;max-width:600px;width:100%">
+            <div style="color:#ffd966;font-size:14px;margin-bottom:6px">🏛 永久强化 <span id="permGoldDisplay" style="color:#ffcc44"></span></div>
+            <div id="permUpgradeList" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center"></div>
+        </div>
         <div class="mode-buttons">
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
@@ -162,22 +166,52 @@
 
         // Roles & Characters
         const ROLES={
-            dot:{name:'白点',color:'#f0f0ff',glow:'#ffffff',hpMult:1,dmgMult:1,spdMult:1,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:null,skillName:null,skillCD:0,desc:'平衡型 · 无技能',locked:false},
-            warrior:{name:'战士',color:'#804808',glow:'#a06010',hpMult:1.5,dmgMult:0.9,spdMult:0.85,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:'whirlwind',skillName:'旋风斩',skillCD:8,desc:'高血量 · 近战AOE',locked:true,unlockKey:'totalKills',unlockVal:500,unlockDesc:'累计击杀500敌人'},
-            ranger:{name:'游侠',color:'#44dd66',glow:'#22ff44',hpMult:0.7,dmgMult:1.3,spdMult:1.1,fireRateMult:1.2,dodgeBase:0,piercingBase:0,skill:'arrowRain',skillName:'箭雨',skillCD:10,desc:'高伤害 · 远程AOE',locked:true,unlockKey:'bestTime',unlockVal:600,unlockDesc:'单次存活10分钟'},
-            mage:{name:'法师',color:'#6688ff',glow:'#4466ff',hpMult:0.85,dmgMult:1.0,spdMult:0.9,fireRateMult:0.9,dodgeBase:0,piercingBase:1,skill:'frostNova',skillName:'冰冻新星',skillCD:12,desc:'控制型 · 自带穿透',locked:true,unlockKey:'totalBossKills',unlockVal:3,unlockDesc:'累计击杀3个Boss'},
-            shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.1,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'}
+            dot:{name:'白点',color:'#f0f0ff',glow:'#ffffff',hpMult:1,dmgMult:1,spdMult:1,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:null,skillName:null,skillCD:0,desc:'平衡型 · 无技能',weapon:'dot',locked:false},
+            warrior:{name:'战士',color:'#804808',glow:'#a06010',hpMult:1.5,dmgMult:0.9,spdMult:0.85,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:'whirlwind',skillName:'旋风斩',skillCD:8,desc:'高血量 · 近战AOE',weapon:'sword',locked:true,unlockKey:'totalKills',unlockVal:500,unlockDesc:'累计击杀500敌人'},
+            ranger:{name:'游侠',color:'#44dd66',glow:'#22ff44',hpMult:0.7,dmgMult:1.3,spdMult:1.1,fireRateMult:1.2,dodgeBase:0,piercingBase:0,skill:'arrowRain',skillName:'箭雨',skillCD:10,desc:'高伤害 · 远程AOE',weapon:'arrow',locked:true,unlockKey:'bestTime',unlockVal:600,unlockDesc:'单次存活10分钟'},
+            mage:{name:'法师',color:'#6688ff',glow:'#4466ff',hpMult:0.85,dmgMult:1.0,spdMult:0.9,fireRateMult:0.9,dodgeBase:0,piercingBase:1,skill:'frostNova',skillName:'冰冻新星',skillCD:12,desc:'控制型 · 自带穿透',weapon:'orb',locked:true,unlockKey:'totalBossKills',unlockVal:3,unlockDesc:'累计击杀3个Boss'},
+            shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.1,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',weapon:'dagger',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'}
         };
         let selectedRole='dot';
         let playerZones=[],clones=[];
 
         // Meta stats (persisted in localStorage for unlock tracking)
-        let metaStats={totalKills:0,totalBossKills:0,bestTime:0};
+        let metaStats={totalKills:0,totalBossKills:0,bestTime:0,totalGold:0};
         function loadMeta(){try{let s=localStorage.getItem('rl_meta');if(s)metaStats={...metaStats,...JSON.parse(s)};}catch(e){}}
         function saveMeta(){localStorage.setItem('rl_meta',JSON.stringify(metaStats));}
         function checkUnlocks(){for(let k in ROLES){let r=ROLES[k];if(r.locked&&r.unlockKey&&metaStats[r.unlockKey]>=r.unlockVal)r.locked=false;}}
-        loadMeta();checkUnlocks();
 
+        // Permanent upgrades (meta-progression)
+        const PERM_UPGRADES=[
+            {key:'permHp',name:'❤️ 生命',desc:'+3% 最大生命',max:10,cost:i=>20+i*15},
+            {key:'permDmg',name:'⚡ 攻击',desc:'+2% 伤害',max:10,cost:i=>25+i*20},
+            {key:'permSpd',name:'👟 速度',desc:'+2% 移速',max:5,cost:i=>30+i*20},
+            {key:'permCrit',name:'💥 暴击',desc:'+1% 暴击率',max:10,cost:i=>20+i*15},
+            {key:'permArmor',name:'🛡 护甲',desc:'受伤-1',max:5,cost:i=>40+i*30},
+            {key:'permRegen',name:'💚 再生',desc:'+0.5/s 回血',max:3,cost:i=>60+i*50},
+        ];
+        let permLevels={permHp:0,permDmg:0,permSpd:0,permCrit:0,permArmor:0,permRegen:0};
+        function loadPerms(){try{let s=localStorage.getItem('rl_perms');if(s)permLevels={...permLevels,...JSON.parse(s)};}catch(e){}}
+        function savePerms(){localStorage.setItem('rl_perms',JSON.stringify(permLevels));}
+        function buyPerm(idx){
+            let u=PERM_UPGRADES[idx],lv=permLevels[u.key]||0;if(lv>=u.max)return false;
+            let c=u.cost(lv);if(metaStats.totalGold<c)return false;
+            metaStats.totalGold-=c;permLevels[u.key]=(lv||0)+1;savePerms();saveMeta();return true;
+        }
+        loadMeta();loadPerms();checkUnlocks();
+
+        function buildPermUpgrades(){
+            let el=document.getElementById('permUpgradeList');el.innerHTML='';
+            document.getElementById('permGoldDisplay').textContent=`(💰 ${metaStats.totalGold||0})`;
+            PERM_UPGRADES.forEach((u,idx)=>{
+                let lv=permLevels[u.key]||0,maxed=lv>=u.max,cost=maxed?'MAX':u.cost(lv);
+                let btn=document.createElement('button');
+                btn.style.cssText='background:#1a2a3a;color:#ddd;border:1px solid '+(maxed?'#446':'#ffd966')+';padding:4px 8px;border-radius:6px;font-size:12px;cursor:'+(maxed?'default':'pointer')+';min-width:90px;';
+                btn.innerHTML=`${u.name} <span style="color:#aaa">${lv}/${u.max}</span><br><span style="color:#888;font-size:10px">${u.desc}</span><br><span style="color:#ffd966">${maxed?'已满':cost+'💰'}</span>`;
+                if(!maxed)btn.addEventListener('click',()=>{if(buyPerm(idx)){buildPermUpgrades();}});
+                el.appendChild(btn);
+            });
+        }
         function buildRoleSelect(){
             const el=document.getElementById('roleSelect');el.innerHTML='';checkUnlocks();
             for(let k in ROLES){let r=ROLES[k];
@@ -191,7 +225,7 @@
                 el.appendChild(card);
             }
         }
-        buildRoleSelect();
+        buildRoleSelect();buildPermUpgrades();
 
         // Key mapping
         let keyMap={up:'w',down:'s',left:'a',right:'d',interact:'e',pause:'p'};
@@ -320,7 +354,7 @@
             dodge:0,invincibleTimer:0,radius:PLAYER_RADIUS,gold:0,damageFlash:0,
             dashCooldown:0,isDashing:false,dashTimer:0,dashDirX:0,dashDirY:0};
 
-        let enemies=[],elites=[],bullets=[],xpOrbs=[],chests=[],bosses=[],floatingTexts=[],magicZones=[];
+        let enemies=[],elites=[],bullets=[],xpOrbs=[],chests=[],bosses=[],floatingTexts=[],magicZones=[],particles=[];
         let lastShotTime=0,lastSpawnTime=0,killCount=0,eliteKillCount=0,bossKillCount=0;
         let upgradeOptions=[],nearbyChest=null,shopItems=[null,null,null],shopRefreshCount=0;
         let lastTimestamp=0,gameLoop=null;
@@ -331,6 +365,8 @@
         // Horde events
         let hordeTimer=0,hordeWarning=0,hordeCount=0;
         const HORDE_INTERVAL=120,HORDE_WARNING_TIME=3;
+        let vacuumPulse=false,vacuumTimer=0;
+        const VACUUM_INTERVAL=60;
         let lastEliteSpawnTime=0;
 
         // Screen shake
@@ -444,11 +480,13 @@
 
         function damagePlayer(amount){
             if(player.isDashing)return;
+            amount=Math.max(1,amount-(player.armor||0));
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
             screenShakeTimer=0.2;screenShakeIntensity=4+Math.min(amount,8);
             if(player.hp<=0){
                 gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;
                 metaStats.totalKills+=killCount;metaStats.totalBossKills+=bossKillCount;
+                metaStats.totalGold+=player.gold;
                 if(gameTime>metaStats.bestTime)metaStats.bestTime=gameTime;
                 saveMeta();
             }
@@ -470,9 +508,14 @@
                 dodge:role.dodgeBase,invincibleTimer:0,radius:PLAYER_RADIUS,gold:0,damageFlash:0,
                 dashCooldown:0,isDashing:false,dashTimer:0,dashDirX:0,dashDirY:0,
                 skillTimer:0,skillActive:null,role:selectedRole,
-                lifesteal:0,magnetRange:0,thorns:0,magnetBoost:0,comboCount:0,comboTimer:0};
+                lifesteal:0,magnetRange:0,thorns:0,comboCount:0,comboTimer:0,armor:permLevels.permArmor||0,regen:(permLevels.permRegen||0)*0.5};
+            // Apply permanent upgrades
+            player.maxHp=Math.floor(player.maxHp*(1+(permLevels.permHp||0)*0.03));player.hp=player.maxHp;
+            player.damage=player.damage*(1+(permLevels.permDmg||0)*0.02);
+            player.speed=player.speed*(1+(permLevels.permSpd||0)*0.02);
+            player.critChance=player.critChance+(permLevels.permCrit||0)*0.01;
             enemies=[];elites=[];bullets=[];xpOrbs=[];chests=[];bosses=[];floatingTexts=[];magicZones=[];
-            playerZones=[];clones=[];hordeTimer=0;hordeWarning=0;hordeCount=0;resetSkillMods();
+            playerZones=[];clones=[];particles=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;vacuumPulse=false;vacuumTimer=0;resetSkillMods();
             killCount=0;eliteKillCount=0;bossKillCount=0;lastShotTime=0;lastSpawnTime=0;lastChestSpawnTime=0;
             lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
@@ -562,9 +605,17 @@
             else{let bd2=Math.floor(3*sd);for(let i=0;i<8;i++){let a=(i/8)*Math.PI*2;bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*160,vy:Math.sin(a)*160,radius:7,damage:bd2,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true});}}
         }
 
+        function spawnDeathParticles(x,y,r,color,count){
+            for(let i=0;i<count;i++){let a=Math.random()*Math.PI*2,spd=60+Math.random()*120,sz=2+Math.random()*3;
+                particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,size:sz,life:0.4+Math.random()*0.3,maxLife:0.4+Math.random()*0.3,color});}
+        }
+        let hitPause=0;
         function spawnXpFromEnemy(ex,ey,er,isBoss=false,isElite=false){
             let v=Math.floor(er/2)+2+Math.floor(player.level*0.8);if(isBoss)v*=5;if(isElite)v*=2;
             xpOrbs.push({x:ex,y:ey,radius:isBoss?14:(isElite?10:Math.min(7,3.8+v*0.475)),value:v});
+            let pColor=isBoss?'#ff4444':(isElite?'#ff9933':'#ff6666'),pCount=isBoss?20:(isElite?12:6);
+            spawnDeathParticles(ex,ey,er,pColor,pCount);
+            if(isBoss)hitPause=0.08;
             if(isBoss){let g=30+Math.min(player.level*8,120);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
             if(isElite){let g=5+Math.min(player.level,12);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
         }
@@ -585,7 +636,7 @@
                 {n:'💖 最大生命+10',f:()=>{player.maxHp+=10;player.hp+=10;addFloatingText("生命上限+10",player.x,player.y-30,"#ff8888");}},
                 {n:'👟 速度+1',f:()=>{player.speedBonus+=1;addFloatingText("速度提升",player.x,player.y-30,"#88ff88");}},
                 {n:'🌀 闪避+1',f:()=>{player.dodge+=1;addFloatingText("闪避提升",player.x,player.y-30,"#88aaff");}},
-                {n:'🧲 磁铁5秒',f:()=>{player.magnetBoost=5;addFloatingText("磁铁激活!",player.x,player.y-30,"#88ddff");}},
+                {n:'🌀 XP吸取',f:()=>{vacuumPulse=true;addFloatingText("XP吸取!",player.x,player.y-30,"#88ddff");}},
             ];
             items[Math.floor(Math.random()*items.length)].f();
             setTimeout(()=>{let idx=chests.findIndex(c=>c===ch);if(idx!==-1)chests.splice(idx,1);},500);
@@ -604,11 +655,51 @@
                 let d=Math.hypot(aimDx,aimDy);if(d<0.001){aimDx=0;aimDy=-1;}else{aimDx/=d;aimDy/=d;}
             }
             let bc=player.bulletCount,ba=Math.atan2(aimDy,aimDx),sp=0.35;
-            for(let i=0;i<bc;i++){
-                let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp,bx=Math.cos(a),by=Math.sin(a);
+            let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
+            if(wep==='sword'){
+                // Short-range arc slash
+                let sr=60+player.bulletSize*2,dmg=player.damage*1.4;
+                let crit=Math.random()<player.critChance;if(crit)dmg*=player.critDamage;
+                for(let j=enemies.length-1;j>=0;j--){let e=enemies[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
+                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(dmg*player.lifesteal)));
+                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                for(let j=elites.length-1;j>=0;j--){let e=elites[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
+                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(dmg*player.lifesteal)));
+                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                for(let bs of bosses){let d=Math.hypot(bs.x-player.x,bs.y-player.y),ea=Math.atan2(bs.y-player.y,bs.x-player.x);
+                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(dmg*player.lifesteal)));}}
+                player.skillActive={type:'swordSlash',timer:0.15,angle:ba,range:sr};
+            }else if(wep==='arrow'){
+                // Auto-aim nearest enemy
+                let ne=findNearestEnemy();
+                if(ne){let tdx=ne.x-player.x,tdy=ne.y-player.y,td=Math.hypot(tdx,tdy);if(td>0.01)ba=Math.atan2(tdy,tdx);}
+                for(let i=0;i<bc;i++){
+                    let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp,bx=Math.cos(a),by=Math.sin(a);
+                    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+                    bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed*1.3,vy:by*player.bulletSpeed*1.3,
+                        radius:player.bulletSize,damage:player.damage*dm,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:2.5,fromBoss:false,weaponType:'arrow'});}
+            }else if(wep==='orb'){
+                // Slow piercing orb
                 let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
-                bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed,vy:by*player.bulletSpeed,
-                    radius:player.bulletSize,damage:player.damage*dm,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:3.0,fromBoss:false});
+                bullets.push({x:player.x+Math.cos(ba)*(player.radius+3),y:player.y+Math.sin(ba)*(player.radius+3),
+                    vx:Math.cos(ba)*player.bulletSpeed*0.5,vy:Math.sin(ba)*player.bulletSpeed*0.5,
+                    radius:player.bulletSize+4,damage:player.damage*dm*1.8,piercing:player.piercing+2,hitEnemies:new Set(),isCrit:crit,life:4.0,fromBoss:false,weaponType:'orb'});
+            }else if(wep==='dagger'){
+                // Fast short-range burst
+                for(let i=0;i<bc+1;i++){
+                    let a=bc+1===1?ba:ba+(i/bc-0.5)*0.5,bx=Math.cos(a),by=Math.sin(a);
+                    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+                    bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed*1.5,vy:by*player.bulletSpeed*1.5,
+                        radius:player.bulletSize-1,damage:player.damage*dm*0.7,piercing:0,hitEnemies:new Set(),isCrit:crit,life:1.2,fromBoss:false,weaponType:'dagger'});}
+            }else{
+                // Default dot weapon
+                for(let i=0;i<bc;i++){
+                    let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp,bx=Math.cos(a),by=Math.sin(a);
+                    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+                    bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed,vy:by*player.bulletSpeed,
+                        radius:player.bulletSize,damage:player.damage*dm,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:3.0,fromBoss:false,weaponType:'dot'});}
             }
         }
 
@@ -651,13 +742,14 @@
         function updateGame(dt,nowS){
             if(gameState!==STATE_PLAYING)return;
             gameTime+=dt;
+            // Regen
+            if(player.regen>0)player.hp=Math.min(player.maxHp,player.hp+player.regen*dt);
             if(player.invincibleTimer>0)player.invincibleTimer-=dt;
             if(player.damageFlash>0)player.damageFlash-=dt;
             if(player.dashCooldown>0)player.dashCooldown-=dt;
             if(screenShakeTimer>0)screenShakeTimer-=dt;
             if(player.skillTimer>0)player.skillTimer-=dt;
             if(player.skillActive){player.skillActive.timer-=dt;if(player.skillActive.timer<=0)player.skillActive=null;}
-            if(player.magnetBoost>0)player.magnetBoost-=dt;
             if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboTimer<=0)player.comboCount=0;}
 
             // Dash movement
@@ -771,16 +863,16 @@
                     let hit=false;
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
                         e.health-=b.damage;b.hitEnemies.add(e);
-                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
                         if(e.health<=0){
                             if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0});}}
                             spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        e.health-=b.damage;b.hitEnemies.add(e);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
                         if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
-                        bs.health-=b.damage;b.hitEnemies.add(bs);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        bs.health-=b.damage;b.hitEnemies.add(bs);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
                         if(bs.health<=0){spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);bosses.splice(j,1);killCount++;bossKillCount++;player.comboCount++;player.comboTimer=2;
                             let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];shopRefreshCount=0;
                             let role=ROLES[selectedRole];
@@ -790,14 +882,18 @@
                 }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);bullets.splice(i,1);continue;}}
             }
 
-            // XP orbs (magnet attraction + combo multiplier)
-            let effMagnet=player.magnetBoost>0?300:player.magnetRange;
+            // XP vacuum pulse (every 60s or from chest)
+            vacuumTimer+=dt;
+            if(vacuumTimer>=VACUUM_INTERVAL){vacuumPulse=true;vacuumTimer=0;addFloatingText('🌀 XP吸取!',player.x,player.y-50,'#88ddff');}
+            // XP orbs (magnet/vacuum attraction + combo multiplier)
+            let effMagnet=vacuumPulse?9999:player.magnetRange;
             for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i],dx=player.x-o.x,dy=player.y-o.y,d=Math.hypot(dx,dy);
                 if(d<player.radius+o.radius){
                     let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
                     player.exp+=o.value*mult;xpOrbs.splice(i,1);
-                }else if(effMagnet>0&&d<effMagnet){let spd=250*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
+                }else if(effMagnet>0&&d<effMagnet){let spd=(vacuumPulse?600:250)*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
             }
+            if(vacuumPulse&&xpOrbs.length===0)vacuumPulse=false;
 
             // Chests
             nearbyChest=null;
@@ -827,6 +923,8 @@
 
             // Floating texts
             for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
+            // Particles
+            for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vx*=0.95;p.vy*=0.95;if(p.life<=0)particles.splice(i,1);}
             checkLevelUp();updateUI();
         }
 
@@ -867,9 +965,13 @@
             for(let o of xpOrbs){let{x,y}=w2s(o.x,o.y);ctx.beginPath();ctx.arc(x,y,o.radius,0,Math.PI*2);ctx.fillStyle="#f7d44a";ctx.shadowColor="#ffb347";ctx.shadowBlur=12;ctx.fill();}
 
             // Bullets
-            for(let b of bullets){let{x,y}=w2s(b.x,b.y);ctx.beginPath();ctx.arc(x,y,b.radius-1,0,Math.PI*2);
-                if(b.fromBoss){ctx.fillStyle="#ff6666";ctx.shadowColor="#ff0000";}else if(b.isCrit){ctx.fillStyle="#ffaa66";ctx.shadowColor="#ff8800";}else{ctx.fillStyle="#6dd5ff";ctx.shadowColor="#00a6ff";}
-                ctx.shadowBlur=12;ctx.fill();}
+            for(let b of bullets){let{x,y}=w2s(b.x,b.y);
+                if(b.fromBoss){ctx.beginPath();ctx.arc(x,y,b.radius-1,0,Math.PI*2);ctx.fillStyle="#ff6666";ctx.shadowColor="#ff0000";ctx.shadowBlur=12;ctx.fill();}
+                else if(b.weaponType==='arrow'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffdd44':'#88ff88';ctx.shadowColor=b.isCrit?'#ff8800':'#44ff44';ctx.shadowBlur=10;ctx.beginPath();ctx.moveTo(b.radius+4,0);ctx.lineTo(-b.radius,-3);ctx.lineTo(-b.radius,3);ctx.closePath();ctx.fill();ctx.restore();}
+                else if(b.weaponType==='orb'){ctx.beginPath();ctx.arc(x,y,b.radius,0,Math.PI*2);ctx.fillStyle=b.isCrit?'#ffcc66':`rgba(100,140,255,${0.6+0.3*Math.sin(Date.now()/100)})`;ctx.shadowColor=b.isCrit?'#ff8800':'#4466ff';ctx.shadowBlur=18;ctx.fill();}
+                else if(b.weaponType==='dagger'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffaa66':'#cc99ff';ctx.shadowColor=b.isCrit?'#ff8800':'#9944ff';ctx.shadowBlur=8;ctx.fillRect(-4,-2,8,4);ctx.restore();}
+                else{ctx.beginPath();ctx.arc(x,y,b.radius-1,0,Math.PI*2);if(b.isCrit){ctx.fillStyle="#ffaa66";ctx.shadowColor="#ff8800";}else{ctx.fillStyle="#6dd5ff";ctx.shadowColor="#00a6ff";}ctx.shadowBlur=12;ctx.fill();}
+            }
 
             // Chests (cyan)
             for(let c of chests){if(c.isOpen)continue;let{x,y}=w2s(c.x,c.y);ctx.beginPath();ctx.arc(x,y,c.radius,0,Math.PI*2);ctx.fillStyle="#00ccaa";ctx.shadowColor="#00ffcc";ctx.shadowBlur=20;ctx.fill();
@@ -925,11 +1027,16 @@
                 let sa=player.skillActive;
                 if(sa.type==='whirlwind'){let p=sa.timer/0.4;ctx.beginPath();ctx.arc(sp.x,sp.y,120*p,0,Math.PI*2);ctx.strokeStyle=`rgba(255,100,68,${p*0.7})`;ctx.lineWidth=4;ctx.stroke();
                     for(let a=0;a<3;a++){let ang=(Date.now()/50)+a*Math.PI*2/3;ctx.beginPath();ctx.arc(sp.x+Math.cos(ang)*80*p,sp.y+Math.sin(ang)*80*p,8,0,Math.PI*2);ctx.fillStyle=`rgba(255,150,100,${p*0.6})`;ctx.fill();}}
-                if(sa.type==='frostNova'){sa.radius=Math.min(200,sa.radius+800*(1/60));ctx.beginPath();ctx.arc(sp.x,sp.y,sa.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,136,255,${sa.timer*1.5})`;ctx.lineWidth=3;ctx.stroke();
+                if(sa.type==='swordSlash'){let p=sa.timer/0.15;ctx.save();ctx.translate(sp.x,sp.y);ctx.rotate(sa.angle);
+                    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,sa.range*p,-.8,.8);ctx.closePath();ctx.fillStyle=`rgba(255,180,80,${p*0.4})`;ctx.fill();
+                    ctx.strokeStyle=`rgba(255,220,150,${p*0.8})`;ctx.lineWidth=3;ctx.stroke();ctx.restore();}
+                if(sa.type==='frostNova'){sa.radius=Math.min(200+SKILL_MODS.frostNovaRange,sa.radius+800*(1/60));ctx.beginPath();ctx.arc(sp.x,sp.y,sa.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,136,255,${sa.timer*1.5})`;ctx.lineWidth=3;ctx.stroke();
                     ctx.fillStyle=`rgba(150,200,255,${sa.timer*0.2})`;ctx.fill();}
             }
-            // Magnet range visual
-            if(player.magnetBoost>0){let pulse=0.15+0.1*Math.sin(Date.now()/150);ctx.beginPath();ctx.arc(sp.x,sp.y,300,0,Math.PI*2);ctx.strokeStyle=`rgba(100,200,255,${pulse})`;ctx.lineWidth=1;ctx.setLineDash([8,8]);ctx.stroke();ctx.setLineDash([]);}
+            // Vacuum pulse visual
+            if(vacuumPulse){let pulse=0.3+0.2*Math.sin(Date.now()/80);ctx.beginPath();ctx.arc(sp.x,sp.y,200+100*Math.sin(Date.now()/150),0,Math.PI*2);
+                ctx.strokeStyle=`rgba(100,220,255,${pulse})`;ctx.lineWidth=3;ctx.setLineDash([12,6]);ctx.stroke();ctx.setLineDash([]);
+                ctx.fillStyle=`rgba(100,200,255,0.05)`;ctx.fill();}
             // Thorns visual
             if(player.thorns>0){let ta=0.15+0.1*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+3,0,Math.PI*2);ctx.strokeStyle=`rgba(255,150,50,${ta})`;ctx.lineWidth=1.5;ctx.stroke();}
             // Damage flash
@@ -966,6 +1073,8 @@
             // Horde warning
             if(hordeWarning>0){ctx.fillStyle='#ff5555';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`⚠️ 大波敌人 ${Math.ceil(hordeWarning)}s`,W/2,H/2-50);ctx.textAlign='left';}
 
+            // Particles
+            for(let p of particles){let{x,y}=w2s(p.x,p.y);ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.fillRect(x-p.size/2,y-p.size/2,p.size,p.size);ctx.globalAlpha=1.0;}
             // Floating texts
             for(let ft of floatingTexts){let{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font="bold 20px 'Courier New'";ctx.fillStyle=ft.color;ctx.fillText(ft.text,x-30,y-40-(1-ft.life)*20);ctx.globalAlpha=1.0;}
 
@@ -1081,7 +1190,8 @@
             if(!lastTimestamp){lastTimestamp=now;requestAnimationFrame(tick);return;}
             const dt=Math.min(0.05,(now-lastTimestamp)/1000);lastTimestamp=now;
             // Pause game while tutorial is showing
-            if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            if(hitPause>0){hitPause-=dt;}
+            else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
             if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
             // Sync leaderboard with Supabase
@@ -1108,7 +1218,7 @@
 
         // Back to menu (keep nickname, refresh unlocks)
         function backToMenu(){
-            checkUnlocks();buildRoleSelect();
+            checkUnlocks();buildRoleSelect();buildPermUpgrades();
             gameWrapper.style.display='none';startScreen.style.display='flex';
             document.body.classList.remove('touch-mode');
             if(gameLoop){cancelAnimationFrame(gameLoop);gameLoop=null;}
