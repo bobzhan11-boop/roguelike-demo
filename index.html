@@ -1148,7 +1148,7 @@
                 ctx.textAlign="left";for(let i=0;i<3;i++){let it=shopItems[i];if(it){ctx.fillStyle="#f0dbb4";ctx.fillText(`${it.name}  - ${it.price}💰`,pnX+110,pnY+130+i*60);}else{ctx.fillStyle="#888888";ctx.fillText("已售罄",pnX+110,pnY+130+i*60);}}
                 ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5c9b0";let rc=10*Math.pow(2,shopRefreshCount);
                 if(controlMode==='touch'){ctx.fillStyle="#3a4a5acc";ctx.fillRect(pnX+60,pnY+280,140,30);ctx.fillRect(pnX+350,pnY+280,140,30);ctx.fillStyle="#b5c9b0";ctx.fillText(`刷新(${rc}💰)`,pnX+75,pnY+300);ctx.fillText("离开商店",pnX+375,pnY+300);}
-                else ctx.fillText(`1/2/3购买 [R]刷新(${rc}💰) [${keyMap.pause.toUpperCase()}]离开`,pnX+60,pnY+300);
+                else ctx.fillText(`1/2/3购买 [R]刷新(${rc}💰) [Enter]离开`,pnX+60,pnY+300);
             }
             // Paused
             if(gameState===STATE_PAUSED){ctx.fillStyle="#000000aa";ctx.fillRect(0,0,W,H);ctx.font="56px 'Courier New'";ctx.fillStyle="#dddddd";ctx.textAlign="center";ctx.fillText("⏸ 暂停",W/2,280);ctx.font="24px monospace";ctx.fillStyle="#b5a87d";ctx.fillText(controlMode==='touch'?"点击屏幕继续":`按 ${keyMap.pause.toUpperCase()} 继续`,W/2,360);ctx.textAlign="left";}
@@ -1243,12 +1243,12 @@
             canvas.addEventListener('mousemove',e=>{if(controlMode!=='keyboard')return;const r=canvas.getBoundingClientRect();mouseX=clamp((e.clientX-r.left)*canvas.width/r.width,0,canvas.width);mouseY=clamp((e.clientY-r.top)*canvas.height/r.height,0,canvas.height);});
             window.addEventListener('keydown',e=>{
                 if(controlMode!=='keyboard')return;const k=e.key.toLowerCase();if(remapAction)return;
-                if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;else if(gameState===STATE_SHOP)gameState=STATE_PLAYING;e.preventDefault();}
+                if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;e.preventDefault();}
                 else if(k===' '&&gameState===STATE_PLAYING){triggerDash();e.preventDefault();}
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_UPGRADE){if(k==='1')applyUpgrade(0);if(k==='2')applyUpgrade(1);if(k==='3')applyUpgrade(2);e.preventDefault();}
-                else if(gameState===STATE_SHOP){if(stateInputCooldown>0){e.preventDefault();}else{if(k==='1')buyShopItem(0);if(k==='2')buyShopItem(1);if(k==='3')buyShopItem(2);if(k==='r')refreshShop();e.preventDefault();}}
+                else if(gameState===STATE_SHOP){if(stateInputCooldown>0){e.preventDefault();}else{if(k==='1')buyShopItem(0);if(k==='2')buyShopItem(1);if(k==='3')buyShopItem(2);if(k==='r')refreshShop();if(k==='enter')gameState=STATE_PLAYING;e.preventDefault();}}
                 else{keys[k]=true;e.preventDefault();}
             });
             window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
