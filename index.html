@@ -360,7 +360,7 @@
         let lastTimestamp=0,gameLoop=null;
         let spawnRate=0.9,difficultyTimer=0,lastChestSpawnTime=0;
         const CHEST_SPAWN_INTERVAL=30;
-        let bossCountdown=0,bossCountdownReason='',lastBossSpawnTime=0,lastBossLevel=0;
+        let bossCountdown=0,bossCountdownReason='',lastBossSpawnTime=0,lastBossLevel=0,firstBossSpawnTime=0;
         const BOSS_SPAWN_INTERVAL=180,BOSS_COUNTDOWN_TIME=5;
         // Horde events
         let hordeTimer=0,hordeWarning=0,hordeCount=0;
@@ -517,7 +517,7 @@
             enemies=[];elites=[];bullets=[];xpOrbs=[];chests=[];bosses=[];floatingTexts=[];magicZones=[];
             playerZones=[];clones=[];particles=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;resetSkillMods();
             killCount=0;eliteKillCount=0;bossKillCount=0;lastShotTime=0;lastSpawnTime=0;lastChestSpawnTime=0;
-            lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
+            lastBossSpawnTime=0;lastBossLevel=0;firstBossSpawnTime=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
             worldOffsetX=0;worldOffsetY=0;touchActive=false;leftJoy.active=false;rightJoy.active=false;
             touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;showTouchTutorial=controlMode==='touch';
@@ -534,6 +534,7 @@
         function getMonsterStatsByLevel(){return{healthMult:1+player.level*0.18,speedMult:Math.min(2.5,1+player.level*0.12),dmgMult:1+player.level*0.1};}
         function getEliteStatScale(){return{healthMult:1+player.level*0.2,speedMult:Math.min(2.6,1+player.level*0.13),dmgMult:1+player.level*0.12};}
         function getBossStatScale(){return{healthMult:1+player.level*0.3,speedMult:Math.min(3.0,1+player.level*0.18),dmgMult:1+player.level*0.2};}
+        function getBossCDMult(){let t=firstBossSpawnTime?gameTime-firstBossSpawnTime:0;return 1.5+3.5/(1+t/300);}
 
         // Spawn enemy with type variety
         function spawnEnemy(now){
@@ -589,7 +590,7 @@
                 attackTimer:0,attackInterval:bt.attackInterval,contactDamage:bt.contactDamage,
                 chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:spd*3,
                 teleportCooldown:0,attackPhase:0});
-            addFloatingText(`💀 ${bt.name} BOSS!`,x,y-50,bt.color);lastBossSpawnTime=now;lastBossLevel=player.level;
+            addFloatingText(`💀 ${bt.name} BOSS!`,x,y-50,bt.color);if(!firstBossSpawnTime)firstBossSpawnTime=now;lastBossSpawnTime=now;lastBossLevel=player.level;
         }
 
         // Boss attacks
@@ -857,16 +858,16 @@
                 let dx=player.x-boss.x,dy=player.y-boss.y,dist=Math.hypot(dx,dy);
                 if(boss.bossType==='berserker'){
                     if(!boss.isCharging&&!boss.chargeWindup){if(dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}boss.chargeTimer+=dt;
-                        if(boss.chargeTimer>=boss.attackInterval&&dist<400){boss.chargeWindup=0.8;boss.chargeTimer=0;if(dist>0.01){boss.chargeDx=dx/dist;boss.chargeDy=dy/dist;}boss.chargeTargetX=player.x;boss.chargeTargetY=player.y;addFloatingText("⚠️ 冲锋!",boss.x,boss.y-30,"#ff4444");}}
+                        if(boss.chargeTimer>=boss.attackInterval*getBossCDMult()&&dist<400){boss.chargeWindup=0.8;boss.chargeTimer=0;if(dist>0.01){boss.chargeDx=dx/dist;boss.chargeDy=dy/dist;}boss.chargeTargetX=player.x;boss.chargeTargetY=player.y;addFloatingText("⚠️ 冲锋!",boss.x,boss.y-30,"#ff4444");}}
                     else if(boss.chargeWindup>0){boss.chargeWindup-=dt;if(boss.chargeWindup<=0){boss.chargeWindup=0;boss.isCharging=true;boss.chargeDuration=0.6;addFloatingText("💨",boss.x,boss.y-30,"#ff4444");}}
                     else if(boss.isCharging){boss.chargeDuration-=dt;boss.x+=boss.chargeDx*boss.chargeSpeed*dt;boss.y+=boss.chargeDy*boss.chargeSpeed*dt;if(boss.chargeDuration<=0)boss.isCharging=false;}
                 }else if(boss.bossType==='ranger'){
                     let pref=280;if(dist>pref+50&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}else if(dist<pref-50&&dist>0.01){let mv=boss.speed*dt*0.7;boss.x-=(dx/dist)*mv;boss.y-=(dy/dist)*mv;}
-                    boss.attackTimer+=dt;if(boss.attackTimer>=boss.attackInterval){boss.attackTimer=0;rangerBossShoot(boss);}
+                    boss.attackTimer+=dt;if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){boss.attackTimer=0;rangerBossShoot(boss);}
                 }else if(boss.bossType==='sorcerer'){
                     if(dist>300&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
                     boss.teleportCooldown-=dt;if(dist<120&&boss.teleportCooldown<=0){let ta=Math.random()*Math.PI*2,td=300+Math.random()*150;boss.x=player.x+Math.cos(ta)*td;boss.y=player.y+Math.sin(ta)*td;boss.teleportCooldown=5;addFloatingText("✨",boss.x,boss.y-30,"#aa66ff");}
-                    boss.attackTimer+=dt;if(boss.attackTimer>=boss.attackInterval){boss.attackTimer=0;sorcererBossAttack(boss);}
+                    boss.attackTimer+=dt;if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){boss.attackTimer=0;sorcererBossAttack(boss);}
                 }
             }
 
