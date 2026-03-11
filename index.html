@@ -167,7 +167,7 @@
         // Roles & Characters
         const ROLES={
             dot:{name:'白点',color:'#f0f0ff',glow:'#ffffff',hpMult:1,dmgMult:1,spdMult:1,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:null,skillName:null,skillCD:0,desc:'平衡型 · 无技能',weapon:'dot',locked:false},
-            warrior:{name:'战士',color:'#804808',glow:'#a06010',hpMult:1.5,dmgMult:0.9,spdMult:0.85,fireRateMult:1,dodgeBase:0,piercingBase:0,skill:'whirlwind',skillName:'旋风斩',skillCD:8,desc:'高血量 · 近战AOE',weapon:'sword',locked:true,unlockKey:'totalKills',unlockVal:500,unlockDesc:'累计击杀500敌人'},
+            warrior:{name:'战士',color:'#804808',glow:'#a06010',hpMult:1.5,dmgMult:0.9,spdMult:0.85,fireRateMult:0.5,dodgeBase:0,piercingBase:0,skill:'whirlwind',skillName:'旋风斩',skillCD:8,desc:'高血量 · 近战AOE',weapon:'sword',locked:true,unlockKey:'totalKills',unlockVal:500,unlockDesc:'累计击杀500敌人'},
             ranger:{name:'游侠',color:'#44dd66',glow:'#22ff44',hpMult:0.7,dmgMult:1.3,spdMult:1.1,fireRateMult:1.2,dodgeBase:0,piercingBase:0,skill:'arrowRain',skillName:'箭雨',skillCD:10,desc:'高伤害 · 远程AOE',weapon:'arrow',locked:true,unlockKey:'bestTime',unlockVal:600,unlockDesc:'单次存活10分钟'},
             mage:{name:'法师',color:'#6688ff',glow:'#4466ff',hpMult:0.85,dmgMult:1.0,spdMult:0.9,fireRateMult:0.9,dodgeBase:0,piercingBase:1,skill:'frostNova',skillName:'冰冻新星',skillCD:12,desc:'控制型 · 自带穿透',weapon:'orb',locked:true,unlockKey:'totalBossKills',unlockVal:3,unlockDesc:'累计击杀3个Boss'},
             shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.1,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',weapon:'dagger',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'}
@@ -365,8 +365,6 @@
         // Horde events
         let hordeTimer=0,hordeWarning=0,hordeCount=0;
         const HORDE_INTERVAL=120,HORDE_WARNING_TIME=3;
-        let vacuumPulse=false,vacuumTimer=0;
-        const VACUUM_INTERVAL=60;
         let lastEliteSpawnTime=0;
 
         // Screen shake
@@ -517,7 +515,7 @@
             player.speed=player.speed*(1+(permLevels.permSpd||0)*0.02);
             player.critChance=player.critChance+(permLevels.permCrit||0)*0.01;
             enemies=[];elites=[];bullets=[];xpOrbs=[];chests=[];bosses=[];floatingTexts=[];magicZones=[];
-            playerZones=[];clones=[];particles=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;vacuumPulse=false;vacuumTimer=0;resetSkillMods();
+            playerZones=[];clones=[];particles=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;resetSkillMods();
             killCount=0;eliteKillCount=0;bossKillCount=0;lastShotTime=0;lastSpawnTime=0;lastChestSpawnTime=0;
             lastBossSpawnTime=0;lastBossLevel=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
@@ -638,7 +636,7 @@
                 {n:'💖 最大生命+10',f:()=>{player.maxHp+=10;player.hp+=10;addFloatingText("生命上限+10",player.x,player.y-30,"#ff8888");}},
                 {n:'👟 速度+1',f:()=>{player.speedBonus+=1;addFloatingText("速度提升",player.x,player.y-30,"#88ff88");}},
                 {n:'🌀 闪避+1',f:()=>{player.dodge+=1;addFloatingText("闪避提升",player.x,player.y-30,"#88aaff");}},
-                {n:'🌀 XP吸取',f:()=>{vacuumPulse=true;addFloatingText("XP吸取!",player.x,player.y-30,"#88ddff");}},
+                {n:'🌀 XP吸取',f:()=>{for(let o of xpOrbs)o.vacuumed=true;addFloatingText("XP吸取!",player.x,player.y-30,"#88ddff");}},
             ];
             items[Math.floor(Math.random()*items.length)].f();
             setTimeout(()=>{let idx=chests.findIndex(c=>c===ch);if(idx!==-1)chests.splice(idx,1);},500);
@@ -674,9 +672,7 @@
                     let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(dmg*player.lifesteal)));}}
                 player.skillActive={type:'swordSlash',timer:0.15,angle:ba,range:sr};
             }else if(wep==='arrow'){
-                // Auto-aim nearest enemy
-                let ne=findNearestEnemy();
-                if(ne){let tdx=ne.x-player.x,tdy=ne.y-player.y,td=Math.hypot(tdx,tdy);if(td>0.01)ba=Math.atan2(tdy,tdx);}
+                // Manual aim arrow
                 for(let i=0;i<bc;i++){
                     let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp,bx=Math.cos(a),by=Math.sin(a);
                     let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
@@ -705,18 +701,44 @@
             }
         }
 
-        // Upgrade system
+        // Upgrade system (weapon-aware)
         function generateUpgradeOptions(){
+            let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
             const pool=[
-                {name:'❤️ 最大生命 +8',apply:p=>{p.maxHp+=8;p.hp+=8;}},{name:'⚡ 伤害 +1.0',apply:p=>{p.damage+=1.0;}},
-                {name:'🏹 子弹数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}},{name:'📈 射速 -0.03s',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}},
-                {name:'👟 速度+1',apply:p=>{p.speedBonus+=1;}},{name:'🌀 闪避+1',apply:p=>{p.dodge+=1;}},
-                {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},{name:'🗡️ 暴击伤害 +30%',apply:p=>{p.critDamage+=0.3;}},
-                {name:'🎯 穿透 +1',apply:p=>{p.piercing+=1;}},{name:'🔫 子弹大小 +3',apply:p=>{p.bulletSize+=3;}},
+                {name:'❤️ 最大生命 +8',apply:p=>{p.maxHp+=8;p.hp+=8;}},
+                {name:'⚡ 伤害 +1.0',apply:p=>{p.damage+=1.0;}},
+                {name:'👟 速度+1',apply:p=>{p.speedBonus+=1;}},
+                {name:'🌀 闪避+1',apply:p=>{p.dodge+=1;}},
+                {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},
+                {name:'🗡️ 暴击伤害 +30%',apply:p=>{p.critDamage+=0.3;}},
                 {name:'🧲 磁铁范围 +40',apply:p=>{p.magnetRange=Math.min(200,p.magnetRange+40);}},
                 {name:'🩸 生命窃取 +3%',apply:p=>{p.lifesteal=Math.min(0.2,p.lifesteal+0.03);}},
                 {name:'🦔 反伤 +2',apply:p=>{p.thorns+=2;}},
-            ];return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
+            ];
+            // Weapon-specific upgrades
+            if(wep==='sword'){
+                pool.push({name:'⚔️ 斩击范围 +15',apply:p=>{p.bulletSize+=5;}});
+                pool.push({name:'⚔️ 剑气数 +1',apply:p=>{p.bulletCount=Math.min(8,p.bulletCount+1);}});
+                pool.push({name:'⚔️ 挥击速度',apply:p=>{p.fireInterval=Math.max(0.2,p.fireInterval-0.05);}});
+            }else if(wep==='arrow'){
+                pool.push({name:'🏹 箭矢数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
+                pool.push({name:'🏹 射速提升',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}});
+                pool.push({name:'🏹 穿透 +1',apply:p=>{p.piercing+=1;}});
+            }else if(wep==='orb'){
+                pool.push({name:'🔮 法球大小 +4',apply:p=>{p.bulletSize+=4;}});
+                pool.push({name:'🔮 施法速度',apply:p=>{p.fireInterval=Math.max(0.15,p.fireInterval-0.04);}});
+                pool.push({name:'🔮 穿透 +1',apply:p=>{p.piercing+=1;}});
+            }else if(wep==='dagger'){
+                pool.push({name:'🗡 飞刀数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
+                pool.push({name:'🗡 出刀速度',apply:p=>{p.fireInterval=Math.max(0.06,p.fireInterval-0.03);}});
+                pool.push({name:'🗡 穿透 +1',apply:p=>{p.piercing+=1;}});
+            }else{
+                pool.push({name:'🏹 子弹数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
+                pool.push({name:'📈 射速 -0.03s',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}});
+                pool.push({name:'🎯 穿透 +1',apply:p=>{p.piercing+=1;}});
+                pool.push({name:'🔫 子弹大小 +3',apply:p=>{p.bulletSize+=3;}});
+            }
+            return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
         }
         function applyUpgrade(i){
             if(i<0||i>=upgradeOptions.length)return;const old=player.nextExp;upgradeOptions[i].apply(player);
@@ -753,6 +775,23 @@
             if(player.skillTimer>0)player.skillTimer-=dt;
             if(player.skillActive){player.skillActive.timer-=dt;if(player.skillActive.timer<=0)player.skillActive=null;}
             if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboTimer<=0)player.comboCount=0;}
+            // Sword energy projectile (warrior)
+            if((ROLES[selectedRole]||ROLES.dot).weapon==='sword'){
+                player.swordEnergyTimer=(player.swordEnergyTimer||0)+dt;
+                if(player.swordEnergyTimer>=3.0){player.swordEnergyTimer=0;
+                    let aimDx,aimDy;
+                    if(controlMode==='touch'){aimDx=Math.cos(touchAimAngle);aimDy=Math.sin(touchAimAngle);}
+                    else{aimDx=mouseX-(player.x-worldOffsetX);aimDy=mouseY-(player.y-worldOffsetY);let d=Math.hypot(aimDx,aimDy);if(d>0.01){aimDx/=d;aimDy/=d;}else{aimDx=1;aimDy=0;}}
+                    let ba=Math.atan2(aimDy,aimDx),bc=player.bulletCount;
+                    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+                    for(let i=0;i<bc;i++){
+                        let a=bc===1?ba:ba+(i/(bc-1)-0.5)*0.4,bx=Math.cos(a),by=Math.sin(a);
+                        bullets.push({x:player.x+bx*(player.radius+5),y:player.y+by*(player.radius+5),vx:bx*player.bulletSpeed*0.8,vy:by*player.bulletSpeed*0.8,
+                            radius:player.bulletSize+2,damage:player.damage*dm*1.2,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:2.0,fromBoss:false,weaponType:'swordEnergy'});
+                    }
+                    addFloatingText('⚔️',player.x,player.y-30,'#ff9944');
+                }
+            }
 
             // Dash movement
             if(player.isDashing){
@@ -884,18 +923,15 @@
                 }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);bullets.splice(i,1);continue;}}
             }
 
-            // XP vacuum pulse (every 60s or from chest)
-            vacuumTimer+=dt;
-            if(vacuumTimer>=VACUUM_INTERVAL){vacuumPulse=true;vacuumTimer=0;addFloatingText('🌀 XP吸取!',player.x,player.y-50,'#88ddff');}
             // XP orbs (magnet/vacuum attraction + combo multiplier)
-            let effMagnet=vacuumPulse?9999:player.magnetRange;
+            let effMagnet=player.magnetRange;
             for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i],dx=player.x-o.x,dy=player.y-o.y,d=Math.hypot(dx,dy);
                 if(d<player.radius+o.radius){
                     let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
                     player.exp+=o.value*mult;xpOrbs.splice(i,1);
-                }else if(effMagnet>0&&d<effMagnet){let spd=(vacuumPulse?600:250)*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
+                }else if(o.vacuumed){let spd=600*dt;o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;
+                }else if(effMagnet>0&&d<effMagnet){let spd=250*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
             }
-            if(vacuumPulse&&xpOrbs.length===0)vacuumPulse=false;
 
             // Chests
             nearbyChest=null;
@@ -972,6 +1008,9 @@
                 else if(b.weaponType==='arrow'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffdd44':'#88ff88';ctx.shadowColor=b.isCrit?'#ff8800':'#44ff44';ctx.shadowBlur=10;ctx.beginPath();ctx.moveTo(b.radius+4,0);ctx.lineTo(-b.radius,-3);ctx.lineTo(-b.radius,3);ctx.closePath();ctx.fill();ctx.restore();}
                 else if(b.weaponType==='orb'){ctx.beginPath();ctx.arc(x,y,b.radius,0,Math.PI*2);ctx.fillStyle=b.isCrit?'#ffcc66':`rgba(100,140,255,${0.6+0.3*Math.sin(Date.now()/100)})`;ctx.shadowColor=b.isCrit?'#ff8800':'#4466ff';ctx.shadowBlur=18;ctx.fill();}
                 else if(b.weaponType==='dagger'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffaa66':'#cc99ff';ctx.shadowColor=b.isCrit?'#ff8800':'#9944ff';ctx.shadowBlur=8;ctx.fillRect(-4,-2,8,4);ctx.restore();}
+                else if(b.weaponType==='swordEnergy'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));
+                    ctx.fillStyle=b.isCrit?'#ffcc44':'#ff9944';ctx.shadowColor=b.isCrit?'#ffaa00':'#cc6600';ctx.shadowBlur=14;
+                    ctx.beginPath();ctx.moveTo(b.radius+6,0);ctx.lineTo(0,-b.radius);ctx.lineTo(-b.radius*0.5,0);ctx.lineTo(0,b.radius);ctx.closePath();ctx.fill();ctx.restore();}
                 else{ctx.beginPath();ctx.arc(x,y,b.radius-1,0,Math.PI*2);if(b.isCrit){ctx.fillStyle="#ffaa66";ctx.shadowColor="#ff8800";}else{ctx.fillStyle="#6dd5ff";ctx.shadowColor="#00a6ff";}ctx.shadowBlur=12;ctx.fill();}
             }
 
@@ -1035,10 +1074,6 @@
                 if(sa.type==='frostNova'){sa.radius=Math.min(200+SKILL_MODS.frostNovaRange,sa.radius+800*(1/60));ctx.beginPath();ctx.arc(sp.x,sp.y,sa.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,136,255,${sa.timer*1.5})`;ctx.lineWidth=3;ctx.stroke();
                     ctx.fillStyle=`rgba(150,200,255,${sa.timer*0.2})`;ctx.fill();}
             }
-            // Vacuum pulse visual
-            if(vacuumPulse){let pulse=0.3+0.2*Math.sin(Date.now()/80);ctx.beginPath();ctx.arc(sp.x,sp.y,200+100*Math.sin(Date.now()/150),0,Math.PI*2);
-                ctx.strokeStyle=`rgba(100,220,255,${pulse})`;ctx.lineWidth=3;ctx.setLineDash([12,6]);ctx.stroke();ctx.setLineDash([]);
-                ctx.fillStyle=`rgba(100,200,255,0.05)`;ctx.fill();}
             // Thorns visual
             if(player.thorns>0){let ta=0.15+0.1*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+3,0,Math.PI*2);ctx.strokeStyle=`rgba(255,150,50,${ta})`;ctx.lineWidth=1.5;ctx.stroke();}
             // Damage flash
