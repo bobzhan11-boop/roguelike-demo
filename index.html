@@ -64,6 +64,8 @@
         #rotateOverlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:#0b0e14; color:#fadf9e; font-size:1.5rem; z-index:300; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; }
         #rotateOverlay .rotate-icon { font-size:4rem; margin-bottom:20px; }
         @media(orientation:portrait){ body.touch-mode #rotateOverlay{display:flex;} body.touch-mode .game-wrapper{display:none !important;} }
+        #achievePopup{position:fixed;bottom:20px;right:20px;background:#1a1f2b;border:2px solid #ffd966;border-radius:12px;padding:12px 20px;color:#fadf9e;font-family:'Courier New',monospace;z-index:250;transform:translateX(120%);transition:transform 0.4s;font-size:0.9rem;max-width:280px;box-shadow:0 4px 15px rgba(0,0,0,0.6);}
+        #achievePopup.show{transform:translateX(0);}
     </style>
 </head>
 <body>
@@ -72,15 +74,33 @@
         <h2>点·火柴人 · 肉鸽</h2>
         <div class="nick-row"><label>昵称:</label><input type="text" id="nickInput" placeholder="Player" maxlength="12"></div>
         <div class="role-select" id="roleSelect"></div>
+        <div id="menuTabs" style="display:flex;gap:8px;margin-bottom:12px;justify-content:center">
+            <button onclick="switchTab('upgrades')" id="tabUpgrades" style="background:#262d3a;border:2px solid #aa8b6e;border-radius:8px;padding:6px 16px;color:#fadf9e;font-family:inherit;font-size:0.85rem;cursor:pointer">🔮 强化</button>
+            <button onclick="switchTab('history')" id="tabHistory" style="background:#1a1f2b;border:2px solid #3a3025;border-radius:8px;padding:6px 16px;color:#7e8a9a;font-family:inherit;font-size:0.85rem;cursor:pointer">📜 历史</button>
+            <button onclick="switchTab('achievements')" id="tabAchievements" style="background:#1a1f2b;border:2px solid #3a3025;border-radius:8px;padding:6px 16px;color:#7e8a9a;font-family:inherit;font-size:0.85rem;cursor:pointer">🏅 成就</button>
+        </div>
         <div id="permUpgradeSection" style="margin:10px 0;max-width:600px;width:100%">
             <div style="color:#b366ff;font-size:14px;margin-bottom:6px">🔮 灵魂石强化 <span id="permGoldDisplay" style="color:#b366ff"></span></div>
             <div id="permUpgradeList" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center"></div>
         </div>
+        <div id="historySection" style="display:none;margin:10px 0;max-width:700px;width:100%">
+            <div style="color:#cbad8e;font-size:16px;margin-bottom:8px">📜 最近记录</div>
+            <div id="historyList" style="font-size:12px;color:#7e8a9a;max-height:200px;overflow-y:auto"></div>
+            <div style="color:#cbad8e;font-size:14px;margin-top:10px">🏆 角色最佳</div>
+            <div id="bestsList" style="font-size:12px;color:#7e8a9a"></div>
+        </div>
+        <div id="achieveSection" style="display:none;margin:10px 0;max-width:700px;width:100%">
+            <div style="color:#ffd966;font-size:16px;margin-bottom:8px">🏅 成就</div>
+            <div id="achieveList" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
+        </div>
         <div class="mode-buttons">
+<div style="width:100%;text-align:center;margin-bottom:10px"><label style="color:#cbad8e;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="bossRushCheck" style="margin-right:6px">🏆 Boss Rush 模式 <small style="color:#7e8a9a">(每60秒一个Boss)</small></label></div>
+<div style="width:100%;text-align:center;margin-bottom:8px"><div style="color:#cbad8e;font-size:0.85rem;margin-bottom:4px">⚙️ 挑战变体</div><div id="mutatorChecks" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center"></div></div>
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
         </div>
     </div>
+    <div id="achievePopup"><span id="achieveText"></span></div>
     <div id="rotateOverlay"><div class="rotate-icon">📱🔄</div><div>请横屏使用<br>Please rotate to landscape</div></div>
 
     <div class="game-wrapper" id="gameWrapper">
@@ -115,6 +135,11 @@
         <div class="key-setting"><span>向右</span><span class="key-display" id="key-right">D</span><button class="remap-btn" data-action="right">修改</button></div>
         <div class="key-setting"><span>互动</span><span class="key-display" id="key-interact">E</span><button class="remap-btn" data-action="interact">修改</button></div>
         <div class="key-setting"><span>暂停</span><span class="key-display" id="key-pause">P</span><button class="remap-btn" data-action="pause">修改</button></div>
+        <div style="border-top:1px solid #3a3025;margin:15px 0;padding-top:15px">
+            <div class="key-setting"><span>屏幕震动</span><select id="shakeSelect" style="background:#10131f;color:#fadf9e;border:1px solid #6b4f3a;border-radius:8px;padding:4px 8px;font-family:inherit"><option value="off">关闭</option><option value="low">低</option><option value="med">中</option><option value="high">高</option></select></div>
+            <div class="key-setting"><span>伤害数字</span><button id="dmgNumToggle" style="background:#3f2f23;border-bottom:2px solid #1e1510;padding:8px 20px">开</button></div>
+            <div class="key-setting"><span>小地图</span><button id="minimapToggle" style="background:#3f2f23;border-bottom:2px solid #1e1510;padding:8px 20px">开</button></div>
+        </div>
         <button id="settingsClose">关闭</button>
     </div>
 
@@ -128,6 +153,20 @@
         const startScreen=document.getElementById('startScreen'), gameWrapper=document.getElementById('gameWrapper');
 
         let controlMode='keyboard';
+        let gameSettings={screenShake:'med',damageNumbers:true,minimap:true};
+        let gameMode='normal';
+        let activeMutators=[];
+        const MUTATORS=[
+            {id:'glassCannon',name:'玻璃大炮',desc:'-50% HP, +30% 伤害',soulBonus:5},
+            {id:'bulletHell',name:'弹幕地狱',desc:'敌人2x射击速度',soulBonus:5},
+            {id:'speedRun',name:'极速挑战',desc:'+30% 全速度',soulBonus:3},
+            {id:'noShop',name:'无商店',desc:'击杀Boss无商店',soulBonus:8},
+            {id:'pacifist',name:'限时猎杀',desc:'每4分钟必须杀Boss',soulBonus:10},
+        ];
+        let voidMode=false;
+        function loadSettings(){try{let s=localStorage.getItem('rl_settings');if(s)gameSettings={...gameSettings,...JSON.parse(s)};}catch(e){}}
+        function saveSettings(){localStorage.setItem('rl_settings',JSON.stringify(gameSettings));}
+        loadSettings();
         let gameTime=0;
         let playerNickname='Player';
         let showTouchTutorial=false;
@@ -170,13 +209,14 @@
             warrior:{name:'战士',color:'#804808',glow:'#a06010',hpMult:1.4,dmgMult:1.1,spdMult:0.8,fireRateMult:0.7,dodgeBase:0,piercingBase:0,skill:'whirlwind',skillName:'旋风斩',skillCD:8,desc:'高血量 · 近战AOE',weapon:'sword',locked:true,unlockKey:'totalKills',unlockVal:500,unlockDesc:'累计击杀500敌人'},
             ranger:{name:'游侠',color:'#44dd66',glow:'#22ff44',hpMult:0.7,dmgMult:1.3,spdMult:1.0,fireRateMult:1.0,dodgeBase:0,piercingBase:0,skill:'arrowRain',skillName:'箭雨',skillCD:10,desc:'高伤害 · 远程AOE',weapon:'arrow',locked:true,unlockKey:'bestTime',unlockVal:600,unlockDesc:'单次存活10分钟'},
             mage:{name:'法师',color:'#6688ff',glow:'#4466ff',hpMult:0.8,dmgMult:1.1,spdMult:0.8,fireRateMult:1.3,dodgeBase:0,piercingBase:1,skill:'frostNova',skillName:'冰冻新星',skillCD:12,desc:'控制型 · 自带穿透',weapon:'orb',locked:true,unlockKey:'totalBossKills',unlockVal:3,unlockDesc:'累计击杀3个Boss'},
-            shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.0,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',weapon:'dagger',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'}
+            shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.0,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',weapon:'dagger',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'},
+            necromancer:{name:'死灵',color:'#44cc88',glow:'#22ff66',hpMult:0.75,dmgMult:1.0,spdMult:0.9,fireRateMult:1.1,dodgeBase:0,piercingBase:1,skill:'raiseDead',skillName:'亡灵复苏',skillCD:20,desc:'穿透+标记·召唤亡灵',weapon:'soulBolt',locked:true,unlockKey:'totalBossKills',unlockVal:10,unlockDesc:'累计击杀10个Boss'},
         };
         let selectedRole='dot';
-        let playerZones=[],clones=[];
+        let playerZones=[],clones=[],friendlyGhosts=[],recentDeaths=[];
 
         // Meta stats (persisted in localStorage for unlock tracking)
-        let metaStats={totalKills:0,totalBossKills:0,bestTime:0,soulStones:0};
+        let metaStats={totalKills:0,totalBossKills:0,bestTime:0,soulStones:0,prestigeLevel:0};
         function loadMeta(){try{let s=localStorage.getItem('rl_meta');if(s)metaStats={...metaStats,...JSON.parse(s)};}catch(e){}}
         function saveMeta(){localStorage.setItem('rl_meta',JSON.stringify(metaStats));}
         function checkUnlocks(){for(let k in ROLES){let r=ROLES[k];if(r.locked&&r.unlockKey&&metaStats[r.unlockKey]>=r.unlockVal)r.locked=false;}}
@@ -198,11 +238,15 @@
             let c=u.cost(lv);if(metaStats.soulStones<c)return false;
             metaStats.soulStones-=c;permLevels[u.key]=(lv||0)+1;savePerms();saveMeta();return true;
         }
+        function loadHistory(){try{return JSON.parse(localStorage.getItem('rl_history')||'[]');}catch(e){return[];}}
+        function saveHistory(run){let h=loadHistory();h.unshift(run);if(h.length>10)h.length=10;localStorage.setItem('rl_history',JSON.stringify(h));}
+        function loadBests(){try{return JSON.parse(localStorage.getItem('rl_bests')||'{}');}catch(e){return{};}}
+        function saveBest(role,time,kills,level){let b=loadBests();if(!b[role]||time>b[role].time){b[role]={time,kills,level};localStorage.setItem('rl_bests',JSON.stringify(b));}}
         loadMeta();loadPerms();checkUnlocks();
 
         function buildPermUpgrades(){
             let el=document.getElementById('permUpgradeList');el.innerHTML='';
-            document.getElementById('permGoldDisplay').textContent=`(🔮 ${metaStats.soulStones||0})`;
+            document.getElementById('permGoldDisplay').textContent=`(🔮 ${metaStats.soulStones||0}${metaStats.prestigeLevel>0?' ✨觉醒Lv'+metaStats.prestigeLevel:''})`;
             PERM_UPGRADES.forEach((u,idx)=>{
                 let lv=permLevels[u.key]||0,maxed=lv>=u.max,cost=maxed?'MAX':u.cost(lv);
                 let btn=document.createElement('button');
@@ -211,6 +255,19 @@
                 if(!maxed)btn.addEventListener('click',()=>{if(buyPerm(idx)){buildPermUpgrades();}});
                 el.appendChild(btn);
             });
+            if((metaStats.soulStones||0)>=500||(metaStats.prestigeLevel||0)>0){
+                let btn=document.createElement('button');
+                btn.style.cssText='background:#2a0a3e;color:#ddb0ff;border:2px solid #9944ff;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;margin-top:8px;width:100%;';
+                btn.innerHTML=`✨ 觉醒 (Prestige Lv${metaStats.prestigeLevel||0}) <span style="color:#888;font-size:11px">重置强化, 永久+5%全属性 (需500🔮)</span>`;
+                btn.addEventListener('click',()=>{
+                    if(metaStats.soulStones<500){addFloatingText&&addFloatingText('灵魂石不足',0,0,'#ff5555');return;}
+                    if(!confirm('确定要觉醒? 将重置所有强化等级!'))return;
+                    metaStats.soulStones-=500;metaStats.prestigeLevel=(metaStats.prestigeLevel||0)+1;
+                    permLevels={permHp:0,permDmg:0,permSpd:0,permCrit:0,permArmor:0,permRegen:0};
+                    savePerms();saveMeta();buildPermUpgrades();
+                });
+                el.appendChild(btn);
+            }
         }
         function buildRoleSelect(){
             const el=document.getElementById('roleSelect');el.innerHTML='';checkUnlocks();
@@ -226,6 +283,105 @@
             }
         }
         buildRoleSelect();buildPermUpgrades();
+        function buildMutators(){
+            let el=document.getElementById('mutatorChecks');if(!el)return;el.innerHTML='';
+            for(let m of MUTATORS){
+                let lbl=document.createElement('label');
+                lbl.style.cssText='color:#7e8a9a;cursor:pointer;font-size:0.75rem;background:#1a1f2b;border:1px solid #3a3025;border-radius:6px;padding:3px 8px;';
+                lbl.innerHTML=`<input type="checkbox" data-mutator="${m.id}" style="margin-right:3px">${m.name} <span style="color:#555">${m.desc}</span> <span style="color:#b366ff">+${m.soulBonus}🔮</span>`;
+                el.appendChild(lbl);
+            }
+        }
+        buildMutators();
+        function switchTab(tab){
+            document.getElementById('permUpgradeSection').style.display=tab==='upgrades'?'':'none';
+            document.getElementById('historySection').style.display=tab==='history'?'':'none';
+            document.getElementById('achieveSection').style.display=tab==='achievements'?'':'none';
+            ['tabUpgrades','tabHistory','tabAchievements'].forEach(id=>{
+                let el=document.getElementById(id);if(!el)return;
+                let active=id==='tab'+tab.charAt(0).toUpperCase()+tab.slice(1);
+                el.style.borderColor=active?'#aa8b6e':'#3a3025';el.style.color=active?'#fadf9e':'#7e8a9a';el.style.background=active?'#262d3a':'#1a1f2b';
+            });
+            if(tab==='history')buildHistory();
+            if(tab==='achievements')buildAchievements();
+        }
+        window.switchTab=switchTab;
+        // Achievement system
+        let unlockedAchievements=[];
+        function loadAchievements(){try{unlockedAchievements=JSON.parse(localStorage.getItem('rl_achievements')||'[]');}catch(e){unlockedAchievements=[];}}
+        function saveAchievements(){localStorage.setItem('rl_achievements',JSON.stringify(unlockedAchievements));}
+        loadAchievements();
+        const ACHIEVEMENTS=[
+            {id:'kill100',name:'杀戮者',desc:'单次击杀100敌人',icon:'💀',reward:5,check:()=>killCount>=100},
+            {id:'kill1000',name:'屠杀者',desc:'累计击杀1000敌人',icon:'☠️',reward:10,check:()=>(metaStats.totalKills||0)>=1000},
+            {id:'boss5',name:'Boss猎人',desc:'单次击杀5个Boss',icon:'👑',reward:15,check:()=>bossKillCount>=5},
+            {id:'combo20',name:'连击大师',desc:'达到20连击',icon:'🔥',reward:5,check:()=>runStats.highestCombo>=20},
+            {id:'crit50',name:'暴击狂人',desc:'单次暴击50次',icon:'💥',reward:5,check:()=>runStats.totalCrits>=50},
+            {id:'survive10',name:'坚持不懈',desc:'存活10分钟',icon:'⏱️',reward:5,check:()=>gameTime>=600},
+            {id:'survive30',name:'持久战',desc:'存活30分钟',icon:'🕐',reward:15,check:()=>gameTime>=1800},
+            {id:'survive60',name:'不朽传说',desc:'存活60分钟',icon:'🕛',reward:30,check:()=>gameTime>=3600},
+            {id:'nodmg60',name:'无伤60秒',desc:'连续60秒不受伤',icon:'🛡️',reward:10,check:()=>runStats.noDamageTimer>=60},
+            {id:'crit50pct',name:'暴击专家',desc:'暴击率达50%',icon:'🎯',reward:5,check:()=>player.critChance>=0.5},
+            {id:'proj6',name:'弹幕大师',desc:'拥有6+投射物',icon:'🏹',reward:5,check:()=>player.bulletCount>=6},
+            {id:'speed400',name:'闪电侠',desc:'速度达400',icon:'⚡',reward:5,check:()=>getFinalSpeed()>=400},
+            {id:'lifesteal15',name:'吸血鬼',desc:'生命窃取15%',icon:'🩸',reward:5,check:()=>player.lifesteal>=0.15},
+            {id:'allRoles',name:'全能战士',desc:'每个角色存活10分钟',icon:'🌟',reward:20,check:()=>{let b=loadBests();return Object.keys(ROLES).every(k=>b[k]&&b[k].time>=600);}},
+            {id:'role20min',name:'角色大师',desc:'每角色存活20分钟',icon:'👑',reward:25,check:()=>{let b=loadBests();return Object.keys(ROLES).every(k=>b[k]&&b[k].time>=1200);}},
+        ];
+        let achievePopupQueue=[],achievePopupTimer=0;
+        function checkAchievements(){
+            for(let a of ACHIEVEMENTS){
+                if(unlockedAchievements.includes(a.id))continue;
+                try{if(a.check()){
+                    unlockedAchievements.push(a.id);saveAchievements();
+                    metaStats.soulStones+=a.reward;saveMeta();
+                    achievePopupQueue.push(`${a.icon} ${a.name} +${a.reward}🔮`);
+                }}catch(e){}
+            }
+        }
+        function updateAchievePopup(dt){
+            if(achievePopupTimer>0){achievePopupTimer-=dt;if(achievePopupTimer<=0)document.getElementById('achievePopup').classList.remove('show');}
+            if(achievePopupQueue.length>0&&achievePopupTimer<=0){
+                let msg=achievePopupQueue.shift();
+                document.getElementById('achieveText').textContent=msg;
+                document.getElementById('achievePopup').classList.add('show');
+                achievePopupTimer=3;
+            }
+        }
+        function buildAchievements(){
+            let el=document.getElementById('achieveList');el.innerHTML='';
+            for(let a of ACHIEVEMENTS){
+                let unlocked=unlockedAchievements.includes(a.id);
+                let div=document.createElement('div');
+                div.style.cssText='background:'+(unlocked?'#2a3020':'#1a1a2e')+';border:1px solid '+(unlocked?'#66aa44':'#333')+';border-radius:8px;padding:8px;width:130px;text-align:center;font-size:11px;';
+                div.innerHTML=`<div style="font-size:20px">${a.icon}</div><div style="color:${unlocked?'#ffd966':'#666'};font-weight:bold">${a.name}</div><div style="color:#888;font-size:10px">${a.desc}</div><div style="color:${unlocked?'#66aa44':'#555'};font-size:10px">${unlocked?'✅ +'+a.reward+'🔮':'🔒'}</div>`;
+                el.appendChild(div);
+            }
+        }
+        function buildHistory(){
+            let el=document.getElementById('historyList');el.innerHTML='';
+            let hist=loadHistory();
+            if(hist.length===0){el.innerHTML='<div style="color:#666;padding:4px">暂无记录</div>';return;}
+            for(let r of hist){
+                let role=ROLES[r.role]||ROLES.dot;
+                let m=Math.floor(r.time/60),s=Math.floor(r.time%60);
+                let d=new Date(r.date);let ds=d.toLocaleDateString();
+                let div=document.createElement('div');
+                div.style.cssText='display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #2a2a3a;';
+                div.innerHTML=`<span style="color:${role.color}">${role.name}</span><span>Lv${r.level}</span><span>${m}:${s.toString().padStart(2,'0')}</span><span>💀${r.kills}</span><span>👑${r.bossKills}</span><span>🔮${r.soulStones}</span><span style="color:#555">${ds}</span>`;
+                el.appendChild(div);
+            }
+            let bel=document.getElementById('bestsList');bel.innerHTML='';
+            let bests=loadBests();
+            for(let k in ROLES){let b=bests[k];let role=ROLES[k];
+                let div=document.createElement('div');
+                div.style.cssText='display:inline-block;margin:2px 6px;padding:3px 8px;background:#1a1f2b;border-radius:6px;border:1px solid #3a3025;';
+                if(b){let m=Math.floor(b.time/60),s=Math.floor(b.time%60);
+                    div.innerHTML=`<span style="color:${role.color}">${role.name}</span> ${m}:${s.toString().padStart(2,'0')} Lv${b.level}`;
+                }else{div.innerHTML=`<span style="color:#555">${role.name}: --</span>`;}
+                bel.appendChild(div);
+            }
+        }
 
         // Key mapping
         let keyMap={up:'w',down:'s',left:'a',right:'d',interact:'e',pause:'p'};
@@ -256,6 +412,15 @@
                 e.preventDefault();
             }
         });
+        function updateSettingsUI(){
+            document.getElementById('shakeSelect').value=gameSettings.screenShake;
+            document.getElementById('dmgNumToggle').textContent=gameSettings.damageNumbers?'开':'关';
+            document.getElementById('minimapToggle').textContent=gameSettings.minimap?'开':'关';
+        }
+        document.getElementById('shakeSelect').addEventListener('change',e=>{gameSettings.screenShake=e.target.value;saveSettings();});
+        document.getElementById('dmgNumToggle').addEventListener('click',()=>{gameSettings.damageNumbers=!gameSettings.damageNumbers;saveSettings();updateSettingsUI();});
+        document.getElementById('minimapToggle').addEventListener('click',()=>{gameSettings.minimap=!gameSettings.minimap;saveSettings();updateSettingsUI();});
+        updateSettingsUI();
         settingsClose.addEventListener('click',()=>{settingsPanel.style.display='none';if(gameStateBeforeSettings!==undefined){gameState=gameStateBeforeSettings;gameStateBeforeSettings=undefined;}});
         fullscreenBtn.addEventListener('click',()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();});
 
@@ -338,10 +503,15 @@
             berserker:{name:'狂战士',color:'#cc2222',glow:'#ff4444',speedMult:1.8,healthMult:1.3,radiusMult:1.3,contactDamage:8,attackInterval:3.0},
             ranger:{name:'游侠',color:'#22aa55',glow:'#44ff88',speedMult:0.7,healthMult:1.0,radiusMult:0.9,contactDamage:3,attackInterval:1.8},
             sorcerer:{name:'巫师',color:'#7744cc',glow:'#aa66ff',speedMult:0.5,healthMult:0.9,radiusMult:1.0,contactDamage:4,attackInterval:2.5},
+            summoner:{name:'召唤师',color:'#cc8800',glow:'#ffaa00',speedMult:0.6,healthMult:0.7,radiusMult:1.0,contactDamage:3,attackInterval:4.0},
+            juggernaut:{name:'铁甲巨人',color:'#556655',glow:'#88aa88',speedMult:0.3,healthMult:2.5,radiusMult:1.5,contactDamage:10,attackInterval:3.5},
+            twins_fire:{name:'炎之双子',color:'#ff4422',glow:'#ff6644',speedMult:1.5,healthMult:0.6,radiusMult:0.9,contactDamage:6,attackInterval:2.0},
+            twins_ice:{name:'冰之双子',color:'#4488ff',glow:'#66aaff',speedMult:0.8,healthMult:0.6,radiusMult:0.9,contactDamage:4,attackInterval:2.5},
+            archmage:{name:'大法师',color:'#ff44ff',glow:'#ff88ff',speedMult:0.6,healthMult:1.2,radiusMult:1.1,contactDamage:5,attackInterval:2.0},
         };
 
         // Enemy type colors
-        const ENEMY_COLORS={normal:null,shooter:'#4466cc',exploder:'#ff8800',tank:'#336633',splitter:'#44aaaa',mini:'#44aaaa'};
+        const ENEMY_COLORS={normal:null,shooter:'#4466cc',exploder:'#ff8800',tank:'#336633',splitter:'#44aaaa',mini:'#44aaaa',shielded:'#8888cc',healer:'#44bb44',teleporter:'#cc44cc',swarm:'#aacc55'};
 
         const STATE_PLAYING='playing',STATE_UPGRADE='upgrade',STATE_SHOP='shop',STATE_GAMEOVER='gameover',STATE_PAUSED='paused',STATE_SKILL_UP='skillup';
         let gameState=STATE_PLAYING;
@@ -356,6 +526,7 @@
 
         let enemies=[],elites=[],bullets=[],xpOrbs=[],chests=[],bosses=[],floatingTexts=[],magicZones=[],particles=[];
         let lastShotTime=0,lastSpawnTime=0,killCount=0,eliteKillCount=0,bossKillCount=0;
+        let runStats={damageDealt:0,highestCombo:0,goldEarned:0,upgradesTaken:0,totalCrits:0,noDamageTimer:0};
         let upgradeOptions=[],nearbyChest=null,shopItems=[null,null,null],shopRefreshCount=0;
         let lastTimestamp=0,gameLoop=null;
         let spawnRate=0.9,difficultyTimer=0,lastChestSpawnTime=0;
@@ -429,7 +600,13 @@
                 let cn=1+SKILL_MODS.cloneCount,cd=5.0+SKILL_MODS.cloneDuration;
                 for(let c=0;c<cn;c++){let ca=c*(Math.PI*2/cn),cx=player.x+Math.cos(ca)*30,cy=player.y+Math.sin(ca)*30;clones.push({x:cx,y:cy,timer:cd,shootTimer:0});}
                 addFloatingText('👻 分身!',player.x,player.y-40,'#bb77ff');
-            }
+            }else if(role.skill==='raiseDead'){
+    let count=0;
+    for(let rd of recentDeaths){if(rd.timer>0){friendlyGhosts.push({x:rd.x,y:rd.y,timer:8,shootTimer:0});count++;}}
+    recentDeaths=[];
+    if(count>0)addFloatingText(`💀 复活 x${count}!`,player.x,player.y-40,'#44cc88');
+    else addFloatingText('💀 无可复活',player.x,player.y-40,'#666666');
+}
         }
 
         // Skill upgrade system (from boss kills only)
@@ -465,6 +642,12 @@
                 {name:'⏱️ 冷却-2s',apply:()=>{SKILL_MODS.cloneCDReduce+=2;}},
                 {name:'👥 +1分身',apply:()=>{SKILL_MODS.cloneCount+=1;}},
             ],
+            raiseDead:[
+    {name:'💀 亡灵持续+3s',apply:()=>{SKILL_MODS.cloneDuration+=3;}},
+    {name:'💥 亡灵伤害+0.5x',apply:()=>{SKILL_MODS.cloneDmgMult+=0.5;}},
+    {name:'⏱️ 冷却-3s',apply:()=>{SKILL_MODS.cloneCDReduce+=3;}},
+    {name:'👻 标记爆炸',apply:()=>{SKILL_MODS.frostNovaDot+=2;}},
+],
         };
         function generateSkillUpOptions(){
             let role=ROLES[selectedRole];if(!role||!role.skill)return[];
@@ -473,10 +656,11 @@
         function applySkillUpgrade(i){
             if(i<0||i>=skillUpOptions.length)return;
             skillUpOptions[i].apply();skillLevel++;
-            skillUpOptions=[];gameState=STATE_SHOP;stateInputCooldown=0.15;
+            skillUpOptions=[];gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;stateInputCooldown=0.15;
         }
 
         function damagePlayer(amount){
+            runStats.noDamageTimer=0;
             if(player.isDashing)return;
             amount=Math.max(1,amount-(player.armor||0));
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
@@ -484,11 +668,13 @@
             if(player.hp<=0){
                 gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;
                 metaStats.totalKills+=killCount;metaStats.totalBossKills+=bossKillCount;
-                let earnedSouls=Math.floor(gameTime/60)*3+player.level*1+bossKillCount*5;
+                let mutBonus=activeMutators.reduce((s,m)=>{let mt=MUTATORS.find(x=>x.id===m);return s+(mt?mt.soulBonus:0);},0);let earnedSouls=Math.floor(gameTime/60)*3+player.level*1+bossKillCount*5+mutBonus;
                 metaStats.soulStones+=earnedSouls;
                 addFloatingText(`+${earnedSouls} 🔮灵魂石`,player.x,player.y-60,'#b366ff');
                 if(gameTime>metaStats.bestTime)metaStats.bestTime=gameTime;
                 saveMeta();
+                saveHistory({role:selectedRole,time:Math.round(gameTime),kills:killCount,bossKills:bossKillCount,level:player.level,soulStones:earnedSouls,date:Date.now()});
+                saveBest(selectedRole,gameTime,killCount,player.level);
             }
         }
         function tryDodgeOrDamage(amount){
@@ -507,20 +693,27 @@
                 critChance:BASE_CRIT_CHANCE,critDamage:BASE_CRIT_DAMAGE,piercing:BASE_PIERCING+role.piercingBase,bulletSize:BULLET_SIZE,
                 dodge:role.dodgeBase,invincibleTimer:0,radius:PLAYER_RADIUS,gold:0,damageFlash:0,
                 dashCooldown:0,isDashing:false,dashTimer:0,dashDirX:0,dashDirY:0,
-                skillTimer:0,skillActive:null,role:selectedRole,
-                lifesteal:0,magnetRange:0,thorns:0,comboCount:0,comboTimer:0,armor:permLevels.permArmor||0,regen:(permLevels.permRegen||0)*0.5};
+                slowTimer:0,skillTimer:0,skillActive:null,role:selectedRole,
+                lifesteal:0,magnetRange:selectedRole==='ranger'?40:0,thorns:0,comboCount:0,comboTimer:0,armor:permLevels.permArmor||0,regen:(permLevels.permRegen||0)*0.5};
             // Apply permanent upgrades
+            let prestMult=1+(metaStats.prestigeLevel||0)*0.05;
+            player.maxHp=Math.floor(player.maxHp*prestMult);player.damage*=prestMult;player.speed*=prestMult;
             player.maxHp=Math.floor(player.maxHp*(1+(permLevels.permHp||0)*0.03));player.hp=player.maxHp;
             player.damage=player.damage*(1+(permLevels.permDmg||0)*0.02);
             player.speed=player.speed*(1+(permLevels.permSpd||0)*0.02);
             player.critChance=player.critChance+(permLevels.permCrit||0)*0.01;
             enemies=[];elites=[];bullets=[];xpOrbs=[];chests=[];bosses=[];floatingTexts=[];magicZones=[];
-            playerZones=[];clones=[];particles=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;resetSkillMods();
+            playerZones=[];clones=[];particles=[];dmgAccum=new Map();friendlyGhosts=[];recentDeaths=[];hordeTimer=0;hordeWarning=0;hordeCount=0;hitPause=0;resetSkillMods();
             killCount=0;eliteKillCount=0;bossKillCount=0;lastShotTime=0;lastSpawnTime=0;lastChestSpawnTime=0;
+            runStats={damageDealt:0,highestCombo:0,goldEarned:0,upgradesTaken:0,totalCrits:0,noDamageTimer:0};
             lastBossSpawnTime=0;lastBossLevel=0;firstBossSpawnTime=0;lastEliteSpawnTime=0;difficultyTimer=0;gameTime=0;bossCountdown=0;
             spawnRate=0.9;upgradeOptions=[];nearbyChest=null;shopItems=[null,null,null];shopRefreshCount=0;
             worldOffsetX=0;worldOffsetY=0;touchActive=false;leftJoy.active=false;rightJoy.active=false;
             touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;showTouchTutorial=controlMode==='touch';
+            voidMode=false;
+            // Apply mutators
+            if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
+            if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
             updateUI();
         }
 
@@ -531,13 +724,14 @@
             timeSpan.textContent=`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
         function addFloatingText(text,x,y,color="#ffd966"){floatingTexts.push({text,x,y,life:1.0,color});}
-        function getMonsterStatsByLevel(){return{healthMult:1+player.level*0.18,speedMult:Math.min(2.5,1+player.level*0.12),dmgMult:1+player.level*0.1};}
+        function getMonsterStatsByLevel(){let vm=voidMode?1.5:1;return{healthMult:(1+player.level*0.12+gameTime/600)*vm,speedMult:Math.min(2.5,1+player.level*0.12)*vm,dmgMult:(1+player.level*0.1)*vm};}
         function getEliteStatScale(){return{healthMult:1+player.level*0.2,speedMult:Math.min(2.6,1+player.level*0.13),dmgMult:1+player.level*0.12};}
         function getBossStatScale(){return{healthMult:1+player.level*0.3,speedMult:Math.min(3.0,1+player.level*0.18),dmgMult:1+player.level*0.2};}
         function getBossCDMult(){let t=firstBossSpawnTime?gameTime-firstBossSpawnTime:0;return 1.5+3.5/(1+t/300);}
 
         // Spawn enemy with type variety
         function spawnEnemy(now){
+            if(enemies.length>=60)return;
             let baseDelay=Math.max(0.15,0.9-player.level*0.02);
             if(now-lastSpawnTime<baseDelay)return;lastSpawnTime=now;
             let stats=getMonsterStatsByLevel();
@@ -552,17 +746,35 @@
             if(player.level>=5)typePool.push('exploder');
             if(player.level>=7)typePool.push('tank');
             if(player.level>=10)typePool.push('splitter');
+if(player.level>=6)typePool.push('swarm');
+if(player.level>=8)typePool.push('shielded');
+if(player.level>=12)typePool.push('healer');
+if(player.level>=14)typePool.push('teleporter');
             let type=Math.random()<0.7?'normal':typePool[Math.floor(Math.random()*typePool.length)];
+if(type==='swarm'){
+    let sc=5+Math.floor(Math.random()*4);
+    let angle2=Math.random()*Math.PI*2,distance2=450+Math.random()*300;
+    let cx=player.x+Math.cos(angle2)*distance2,cy=player.y+Math.sin(angle2)*distance2;
+    for(let si=0;si<sc;si++){
+        let sa=Math.random()*Math.PI*2,sd=10+Math.random()*20;
+        let sr=3+Math.random()*2,shp=Math.max(1,Math.floor(stats.healthMult*0.5+player.level*0.1)),sspd=(40+Math.random()*30)*stats.speedMult;
+        enemies.push({x:cx+Math.cos(sa)*sd,y:cy+Math.sin(sa)*sd,radius:sr,health:shp,maxHealth:shp,speed:sspd,isBoss:false,isElite:false,type:'swarm',attackTimer:0,shieldAngle:0,healTimer:0});
+    }
+    return;
+}
 
             // Type-specific stat adjustments
             if(type==='shooter'){radius=clamp(radius*0.7,4,12);health*=0.6;speed*=0.6;}
             else if(type==='exploder'){radius=clamp(radius*0.5,4,9);health*=0.4;speed*=2.0;}
             else if(type==='tank'){radius=clamp(radius*1.6,12,28);health*=3;speed*=0.4;}
             else if(type==='splitter'){radius=clamp(radius*1.1,10,18);health*=1.5;speed*=0.9;}
+else if(type==='shielded'){radius=clamp(radius*1.2,10,20);health*=2;speed*=0.7;}
+else if(type==='healer'){radius=clamp(radius*0.8,5,14);health*=0.8;speed*=0.5;}
+else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.2;}
 
             let angle=Math.random()*Math.PI*2,distance=450+Math.random()*300;
             enemies.push({x:player.x+Math.cos(angle)*distance,y:player.y+Math.sin(angle)*distance,
-                radius,health,maxHealth:health,speed,isBoss:false,isElite:false,type:type,attackTimer:0});
+                radius,health,maxHealth:health,speed,isBoss:false,isElite:false,type:type,attackTimer:0,shieldAngle:0,healTimer:0});
         }
 
         function spawnElite(now){
@@ -581,7 +793,24 @@
             let t=now-lastBossSpawnTime;if(t>=BOSS_SPAWN_INTERVAL-BOSS_COUNTDOWN_TIME&&lastBossSpawnTime>0){bossCountdown=BOSS_COUNTDOWN_TIME;addFloatingText(`⚠️ Boss ${BOSS_COUNTDOWN_TIME}秒后出现`,player.x,player.y-80,"#ff5555");}
         }
         function spawnBoss(now){
-            const tks=['berserker','ranger','sorcerer'],tk=tks[Math.floor(Math.random()*tks.length)],bt=BOSS_TYPES[tk];
+            let tks=['berserker','ranger','sorcerer'];if(player.level>=10)tks.push('summoner');if(player.level>=15)tks.push('juggernaut');if(player.level>=20)tks.push('twins');if(player.level>=25)tks.push('archmage');let tk=tks[Math.floor(Math.random()*tks.length)];
+            if(tk==='twins'){
+                let bsc=getBossStatScale();
+                for(let twin of ['twins_fire','twins_ice']){
+                    let tbt=BOSS_TYPES[twin];
+                    let tr=(35+Math.random()*15)*tbt.radiusMult,thp=Math.floor((80+player.level*30+difficultyTimer*2)*tbt.healthMult*bsc.healthMult);
+                    let tspd=(30+player.level*1.5)*tbt.speedMult*bsc.speedMult,ta=Math.random()*Math.PI*2;
+                    let tx=player.x+Math.cos(ta)*500,ty=player.y+Math.sin(ta)*500;
+                    bosses.push({x:tx,y:ty,radius:tr,health:thp,maxHealth:thp,speed:tspd,isBoss:true,bossType:twin,
+                        attackTimer:0,attackInterval:tbt.attackInterval,contactDamage:tbt.contactDamage,
+                        chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:tspd*3,
+                        teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0});
+                    addFloatingText(`💀 ${tbt.name}!`,tx,ty-50,tbt.color);
+                }
+                if(!firstBossSpawnTime)firstBossSpawnTime=now;lastBossSpawnTime=now;lastBossLevel=player.level;
+                return;
+            }
+            let bt=BOSS_TYPES[tk];
             let bsc=getBossStatScale();
             let r=(35+Math.random()*15)*bt.radiusMult,hp=Math.floor((80+player.level*30+difficultyTimer*2)*bt.healthMult*bsc.healthMult);
             let spd=(30+player.level*1.5)*bt.speedMult*bsc.speedMult,a=Math.random()*Math.PI*2;
@@ -589,7 +818,8 @@
             bosses.push({x,y,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:true,bossType:tk,
                 attackTimer:0,attackInterval:bt.attackInterval,contactDamage:bt.contactDamage,
                 chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:spd*3,
-                teleportCooldown:0,attackPhase:0});
+                teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0});
+            if(tk==='juggernaut'){let b=bosses[bosses.length-1];b.armor=3;}
             addFloatingText(`💀 ${bt.name} BOSS!`,x,y-50,bt.color);if(!firstBossSpawnTime)firstBossSpawnTime=now;lastBossSpawnTime=now;lastBossLevel=player.level;
         }
 
@@ -611,14 +841,26 @@
                 particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,size:sz,life:0.4+Math.random()*0.3,maxLife:0.4+Math.random()*0.3,color});}
         }
         let hitPause=0;
+        let dmgAccum=new Map();
+        function showDmg(entity,amt,isCrit){if(!gameSettings.damageNumbers)return;
+            let a=dmgAccum.get(entity);
+            if(!a){a={total:0,crits:0,timer:0.2,x:entity.x,y:entity.y};dmgAccum.set(entity,a);}
+            a.total+=amt;if(isCrit)a.crits++;a.timer=0.2;a.x=entity.x;a.y=entity.y;
+        }
+        function flushDmg(entity){
+            let a=dmgAccum.get(entity);if(!a)return;
+            let col=a.crits>0?'#ff4444':'#ffffff';let txt=Math.round(a.total).toString();
+            if(a.crits>0)txt='💥'+txt;
+            addFloatingText(txt,a.x,a.y-20,col);dmgAccum.delete(entity);
+        }
         function spawnXpFromEnemy(ex,ey,er,isBoss=false,isElite=false){
             let v=Math.floor(er/2)+2+Math.floor(player.level*0.8);if(isBoss)v*=5;if(isElite)v*=2;
             xpOrbs.push({x:ex,y:ey,radius:isBoss?14:(isElite?10:Math.min(7,3.8+v*0.475)),value:v});
             let pColor=isBoss?'#ff4444':(isElite?'#ff9933':'#ff6666'),pCount=isBoss?20:(isElite?12:6);
             spawnDeathParticles(ex,ey,er,pColor,pCount);
             if(isBoss)hitPause=0.08;
-            if(isBoss){let g=30+Math.min(player.level*8,120);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
-            if(isElite){let g=5+Math.min(player.level,12);player.gold+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
+            if(isBoss){let g=Math.floor(30+player.level*8/(1+player.level*0.03));player.gold+=g;runStats.goldEarned+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
+            if(isElite){let g=5+Math.min(player.level,12);player.gold+=g;runStats.goldEarned+=g;addFloatingText(`+${g}💰`,ex,ey-30,"#ffd966");}
         }
         function spawnChest(now){if(now-lastChestSpawnTime<CHEST_SPAWN_INTERVAL)return;lastChestSpawnTime=now;let a=Math.random()*Math.PI*2,d=300+Math.random()*400;chests.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:18,isOpen:false});}
 
@@ -633,7 +875,7 @@
                 {n:'💥 暴击率+3%',f:()=>{player.critChance=Math.min(0.8,player.critChance+0.03);addFloatingText("暴击+3%",player.x,player.y-30,"#ffdd44");}},
                 {n:'🗡️ 暴击伤害+20%',f:()=>{player.critDamage+=0.2;addFloatingText("爆伤+20%",player.x,player.y-30,"#ffaa00");}},
                 {n:'🎯 穿透+1',f:()=>{player.piercing+=1;addFloatingText("穿透+1",player.x,player.y-30,"#aaccff");}},
-                {n:'💰 金币',f:()=>{let g=20+player.level*5;player.gold+=g;addFloatingText(`+${g}金币`,player.x,player.y-30,"#ffd966");}},
+                {n:'💰 金币',f:()=>{let g=20+player.level*5;player.gold+=g;runStats.goldEarned+=g;addFloatingText(`+${g}金币`,player.x,player.y-30,"#ffd966");}},
                 {n:'💖 最大生命+10',f:()=>{player.maxHp+=10;player.hp+=10;addFloatingText("生命上限+10",player.x,player.y-30,"#ff8888");}},
                 {n:'👟 速度+1',f:()=>{player.speedBonus+=1;addFloatingText("速度提升",player.x,player.y-30,"#88ff88");}},
                 {n:'🌀 闪避+1',f:()=>{player.dodge+=1;addFloatingText("闪避提升",player.x,player.y-30,"#88aaff");}},
@@ -692,6 +934,11 @@
                     let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
                     bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed*1.5,vy:by*player.bulletSpeed*1.5,
                         radius:player.bulletSize-1,damage:player.damage*dm*0.7,piercing:0,hitEnemies:new Set(),isCrit:crit,life:1.2,fromBoss:false,weaponType:'dagger'});}
+            }else if(wep==='soulBolt'){
+    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+    bullets.push({x:player.x+Math.cos(ba)*(player.radius+3),y:player.y+Math.sin(ba)*(player.radius+3),
+        vx:Math.cos(ba)*player.bulletSpeed*0.9,vy:Math.sin(ba)*player.bulletSpeed*0.9,
+        radius:player.bulletSize+2,damage:player.damage*dm,piercing:player.piercing+1,hitEnemies:new Set(),isCrit:crit,life:3.0,fromBoss:false,weaponType:'soulBolt',marks:true});
             }else{
                 // Default dot weapon
                 for(let i=0;i<bc;i++){
@@ -707,7 +954,7 @@
             let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
             const pool=[
                 {name:'❤️ 最大生命 +8',apply:p=>{p.maxHp+=8;p.hp+=8;}},
-                {name:'⚡ 伤害 +1.0',apply:p=>{p.damage+=1.0;}},
+                {name:'⚡ 伤害 +1',apply:p=>{p.damage+=1+Math.floor(p.level/5)*0.5;}},
                 {name:'👟 速度+1',apply:p=>{p.speedBonus+=1;}},
                 {name:'🌀 闪避+1',apply:p=>{p.dodge+=1;}},
                 {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},
@@ -733,6 +980,10 @@
                 pool.push({name:'🗡 飞刀数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
                 pool.push({name:'🗡 出刀速度',apply:p=>{p.fireInterval=Math.max(0.06,p.fireInterval-0.03);}});
                 pool.push({name:'🗡 穿透 +1',apply:p=>{p.piercing+=1;}});
+            }else if(wep==='soulBolt'){
+    pool.push({name:'💀 灵魂弹数+1',apply:p=>{p.bulletCount=Math.min(8,p.bulletCount+1);}});
+    pool.push({name:'💀 施法速度',apply:p=>{p.fireInterval=Math.max(0.1,p.fireInterval-0.03);}});
+    pool.push({name:'💀 穿透+1',apply:p=>{p.piercing+=1;}});
             }else{
                 pool.push({name:'🏹 子弹数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
                 pool.push({name:'📈 射速 -0.03s',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}});
@@ -741,9 +992,9 @@
             }
             return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
         }
-        function applyUpgrade(i){
+        function applyUpgrade(i){runStats.upgradesTaken++;
             if(i<0||i>=upgradeOptions.length)return;const old=player.nextExp;upgradeOptions[i].apply(player);
-            player.damage*=1.02; // +2% damage per level
+            player.damage*=1.03; // +3% damage per level
             player.level++;player.exp-=old;player.nextExp=Math.floor(BASE_EXP_NEXT+player.level*EXP_INCREASE_PER_LEVEL);upgradeOptions=[];
             if(player.exp>=player.nextExp){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}else gameState=STATE_PLAYING;updateUI();
         }
@@ -768,6 +1019,8 @@
         function updateGame(dt,nowS){
             if(gameState!==STATE_PLAYING)return;
             gameTime+=dt;
+            runStats.noDamageTimer+=dt;
+            if(gameTime>=1800&&!voidMode){voidMode=true;addFloatingText('⚠️ 虚空降临!',player.x,player.y-80,'#9944ff');screenShakeTimer=0.5;screenShakeIntensity=10;}
             // Regen
             if(player.regen>0)player.hp=Math.min(player.maxHp,player.hp+player.regen*dt);
             if(player.invincibleTimer>0)player.invincibleTimer-=dt;
@@ -775,8 +1028,9 @@
             if(player.dashCooldown>0)player.dashCooldown-=dt;
             if(screenShakeTimer>0)screenShakeTimer-=dt;
             if(player.skillTimer>0)player.skillTimer-=dt;
+            if(player.slowTimer>0)player.slowTimer-=dt;
             if(player.skillActive){player.skillActive.timer-=dt;if(player.skillActive.timer<=0)player.skillActive=null;}
-            if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboTimer<=0)player.comboCount=0;}
+            if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboCount>runStats.highestCombo)runStats.highestCombo=player.comboCount;if(player.comboTimer<=0)player.comboCount=0;}
             // Sword energy projectile (warrior)
             if((ROLES[selectedRole]||ROLES.dot).weapon==='sword'){
                 player.swordEnergyTimer=(player.swordEnergyTimer||0)+dt;
@@ -805,26 +1059,28 @@
                 // Normal movement
                 if(controlMode==='touch'){
                     if(leftJoy.active){let jdx=leftJoy.kx-leftJoy.bx,jdy=leftJoy.ky-leftJoy.by,jd=Math.hypot(jdx,jdy);
-                        if(jd>JOY_DEAD){let sp=getFinalSpeed()*Math.min(1,jd/JOY_R);player.x+=(jdx/jd)*sp*dt;player.y+=(jdy/jd)*sp*dt;}}
+                        if(jd>JOY_DEAD){let sp=getFinalSpeed()*(player.slowTimer>0?0.6:1)*Math.min(1,jd/JOY_R);player.x+=(jdx/jd)*sp*dt;player.y+=(jdy/jd)*sp*dt;}}
                 }else{
                     let mx=0,my=0;if(keys[keyMap.up])my-=1;if(keys[keyMap.down])my+=1;if(keys[keyMap.left])mx-=1;if(keys[keyMap.right])mx+=1;
-                    if(mx||my){let l=Math.hypot(mx,my),sp=getFinalSpeed();player.x+=mx/l*sp*dt;player.y+=my/l*sp*dt;}
+                    if(mx||my){let l=Math.hypot(mx,my),sp=getFinalSpeed()*(player.slowTimer>0?0.6:1);player.x+=mx/l*sp*dt;player.y+=my/l*sp*dt;}
                     else if(touchActive){let dx=touchTargetX-player.x,dy=touchTargetY-player.y,d=Math.hypot(dx,dy);if(d>10){let sp=getFinalSpeed(),mv=Math.min(sp*dt,d*0.9);player.x+=(dx/d)*mv;player.y+=(dy/d)*mv;}}
                 }
             }
             worldOffsetX=player.x-W/2;worldOffsetY=player.y-H/2;
 
-            shootBullet(nowS);difficultyTimer+=dt;spawnEnemy(nowS);spawnChest(nowS);spawnElite(nowS);
-            checkBossCountdown(nowS);
+            shootBullet(nowS);difficultyTimer+=dt;if(gameMode!=='bossRush')spawnEnemy(nowS);spawnChest(nowS);if(gameMode!=='bossRush')spawnElite(nowS);
+            if(gameMode==='bossRush'){if(gameTime-lastBossSpawnTime>=55&&bossCountdown<=0){bossCountdown=BOSS_COUNTDOWN_TIME;addFloatingText(`⚠️ Boss ${BOSS_COUNTDOWN_TIME}秒后出现`,player.x,player.y-80,'#ff5555');}}else{checkBossCountdown(nowS);}
             // Horde events
             hordeTimer+=dt;
+            if(activeMutators.includes('pacifist')){player.pacifistTimer=(player.pacifistTimer||0)+dt;if(player.pacifistTimer>=240){addFloatingText('💀 时间到!',player.x,player.y-60,'#ff0000');damagePlayer(9999);}}
             if(hordeWarning>0){hordeWarning-=dt;if(hordeWarning<=0){
                 let n=25+Math.floor(player.level*3);hordeCount++;
+                let maxNew=Math.max(0,60-enemies.length);n=Math.min(n,maxNew);
                 for(let i=0;i<n;i++){let a=Math.random()*Math.PI*2,d=350+Math.random()*200;
                     let stats=getMonsterStatsByLevel(),r=5+Math.random()*6,hp=Math.max(1,Math.floor(r/3)*stats.healthMult+player.level*0.2),spd=(30+Math.random()*50)*stats.speedMult;
                     enemies.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:false,isElite:false,type:'normal',attackTimer:0});}
                 addFloatingText(`⚠️ 大波敌人! x${n}`,player.x,player.y-60,'#ff5555');
-                let bonus=15+hordeCount*10;player.gold+=bonus;addFloatingText(`+${bonus}💰 生存奖励`,player.x,player.y-30,'#ffd966');
+                let bonus=15+hordeCount*10;player.gold+=bonus;runStats.goldEarned+=bonus;addFloatingText(`+${bonus}💰 生存奖励`,player.x,player.y-30,'#ffd966');
             }}
             if(hordeTimer>=HORDE_INTERVAL&&hordeWarning<=0){hordeTimer=0;hordeWarning=HORDE_WARNING_TIME;addFloatingText('⚠️ 大波敌人即将来袭!',player.x,player.y-80,'#ff5555');}
             if(bossCountdown>0){bossCountdown-=dt;if(bossCountdown<=0){bossCountdown=0;spawnBoss(nowS);}}
@@ -844,10 +1100,39 @@
                     if(dist>pref+30&&dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
                     else if(dist<pref-30&&dist>0.01){let mv=e.speed*dt*0.5;e.x-=(dx/dist)*mv;e.y-=(dy/dist)*mv;}
                     e.attackTimer=(e.attackTimer||0)+dt;
-                    if(e.attackTimer>=2.0&&dist>0.01){e.attackTimer=0;let sd=Math.floor(1*getMonsterStatsByLevel().dmgMult);bullets.push({x:e.x,y:e.y,vx:(dx/dist)*150,vy:(dy/dist)*150,radius:4,damage:sd,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}
-                }else{
-                    if(dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
-                }
+                    if(e.attackTimer>=(activeMutators.includes('bulletHell')?1.0:2.0)&&dist>0.01){e.attackTimer=0;let sd=Math.floor(1*getMonsterStatsByLevel().dmgMult);bullets.push({x:e.x,y:e.y,vx:(dx/dist)*150,vy:(dy/dist)*150,radius:4,damage:sd,piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}
+                }else if(e.type==='shielded'){
+    e.shieldAngle=Math.atan2(dy,dx);
+    if(dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
+}else if(e.type==='healer'){
+    let pref=200;
+    if(dist>pref+30&&dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
+    else if(dist<pref-30&&dist>0.01){let mv=e.speed*dt*0.5;e.x-=(dx/dist)*mv;e.y-=(dy/dist)*mv;}
+    e.healTimer=(e.healTimer||0)+dt;
+    if(e.healTimer>=3.0){e.healTimer=0;
+        for(let h of enemies){if(h===e||h.health>=h.maxHealth)continue;
+            if(Math.hypot(h.x-e.x,h.y-e.y)<150){h.health=Math.min(h.maxHealth,h.health+h.maxHealth*0.15);
+                addFloatingText('+治疗',h.x,h.y-20,'#44bb44');}}}
+}else if(e.type==='swarm'){
+    let fx=0,fy=0,fc=0;
+    for(let oe of enemies){if(oe.type==='swarm'&&oe!==e){let od=Math.hypot(oe.x-e.x,oe.y-e.y);if(od<80&&od>0.01){fx+=(oe.x-e.x)/od;fy+=(oe.y-e.y)/od;fc++;}}}
+    if(fc>0){fx/=fc;fy/=fc;}
+    let tx=dx*0.7+fx*0.3,ty=dy*0.7+fy*0.3;
+    let td=Math.hypot(tx,ty);
+    if(td>0.01){let mv=e.speed*dt;e.x+=(tx/td)*mv;e.y+=(ty/td)*mv;}
+}else if(e.type==='teleporter'){
+    e.teleportTimer=(e.teleportTimer||0)+dt;
+    e.teleportInvuln=Math.max(0,(e.teleportInvuln||0)-dt);
+    if(e.teleportTimer>=2.0){
+        e.teleportTimer=0;e.teleportInvuln=0.3;
+        let ta=Math.random()*Math.PI*2;
+        e.x=player.x+Math.cos(ta)*150;e.y=player.y+Math.sin(ta)*150;
+        spawnDeathParticles(e.x,e.y,e.radius,'#cc44cc',4);
+    }
+    if(dist>0.01&&e.teleportInvuln<=0){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
+}else{
+    if(dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
+}
             }
             // Elite movement
             for(let e of elites){if((e.frozen||0)>0){e.frozen-=dt;continue;}let dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy);if(d>0.01){let mv=e.speed*dt;e.x+=(dx/d)*mv;e.y+=(dy/d)*mv;}}
@@ -868,7 +1153,130 @@
                     if(dist>300&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
                     boss.teleportCooldown-=dt;if(dist<120&&boss.teleportCooldown<=0){let ta=Math.random()*Math.PI*2,td=300+Math.random()*150;boss.x=player.x+Math.cos(ta)*td;boss.y=player.y+Math.sin(ta)*td;boss.teleportCooldown=5;addFloatingText("✨",boss.x,boss.y-30,"#aa66ff");}
                     boss.attackTimer+=dt;if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){boss.attackTimer=0;sorcererBossAttack(boss);}
-                }
+                }else if(boss.bossType==='summoner'){
+                    let pref=350;
+                    if(dist<pref-50&&dist>0.01){let mv=boss.speed*dt*1.5;boss.x-=(dx/dist)*mv;boss.y-=(dy/dist)*mv;}
+                    else if(dist>pref+50&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+                    boss.attackTimer+=dt;
+                    if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){
+                        boss.attackTimer=0;boss.summonCount=(boss.summonCount||0)+1;
+                        let n=3+Math.floor(Math.random()*3);
+                        let stats=getMonsterStatsByLevel();
+                        for(let si=0;si<n;si++){
+                            let sa=Math.random()*Math.PI*2,sd=40+Math.random()*30;
+                            let sr=6+Math.random()*4,shp=Math.max(2,Math.floor(sr/3)*stats.healthMult+player.level*0.3),sspd=(25+Math.random()*30)*stats.speedMult;
+                            if(boss.summonCount%3===0){sr=14;shp=Math.floor(shp*3);sspd*=0.7;
+                                elites.push({x:boss.x+Math.cos(sa)*sd,y:boss.y+Math.sin(sa)*sd,radius:sr,health:shp,maxHealth:shp,speed:sspd,isElite:true,isBoss:false});
+                            }else{
+                                enemies.push({x:boss.x+Math.cos(sa)*sd,y:boss.y+Math.sin(sa)*sd,radius:sr,health:shp,maxHealth:shp,speed:sspd,isBoss:false,isElite:false,type:'normal',attackTimer:0,shieldAngle:0,healTimer:0});
+                            }
+                        }
+                        addFloatingText(boss.summonCount%3===0?'👹 精英召唤!':'👻 召唤!',boss.x,boss.y-40,'#ffaa00');
+                    }
+                    if(!boss.hasAbsorbed&&boss.health<boss.maxHealth*0.3){
+                        boss.hasAbsorbed=true;let absorbed=0;
+                        for(let ei=enemies.length-1;ei>=0;ei--){
+                            let me=enemies[ei];if(Math.hypot(me.x-boss.x,me.y-boss.y)<200){
+                                boss.health=Math.min(boss.maxHealth,boss.health+boss.maxHealth*0.05);
+                                spawnDeathParticles(me.x,me.y,me.radius,'#ffaa00',4);enemies.splice(ei,1);absorbed++;}
+                        }
+                        if(absorbed>0)addFloatingText(`🔮 吸收了${absorbed}个随从!`,boss.x,boss.y-50,'#ff4444');
+                        screenShakeTimer=0.3;screenShakeIntensity=8;
+                    }
+                }else if(boss.bossType==='juggernaut'){
+                    if(!boss.enraged&&boss.health<boss.maxHealth*0.5){
+                        boss.enraged=true;boss.speed*=2;boss.attackInterval*=0.5;
+                        addFloatingText('💢 暴怒!',boss.x,boss.y-50,'#ff4444');
+                        screenShakeTimer=0.3;screenShakeIntensity=10;
+                    }
+                    if(dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+                    boss.attackTimer+=dt;
+                    if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){
+                        boss.attackTimer=0;
+                        let sd=getBossStatScale().dmgMult;
+                        if(dist<150){
+                            let sr=180;
+                            for(let e of enemies){if(Math.hypot(e.x-boss.x,e.y-boss.y)<sr){let ka=Math.atan2(e.y-boss.y,e.x-boss.x);e.x+=Math.cos(ka)*60;e.y+=Math.sin(ka)*60;}}
+                            if(Math.hypot(player.x-boss.x,player.y-boss.y)<sr+player.radius){tryDodgeOrDamage(Math.floor(6*sd));}
+                            addFloatingText('💥 地震!',boss.x,boss.y-30,'#88aa88');
+                            screenShakeTimer=0.25;screenShakeIntensity=8;
+                        }else{
+                            let ba=Math.atan2(dy,dx),bd=Math.floor(4*sd);
+                            for(let i=0;i<3;i++){let a=ba+(i-1)*0.3;
+                                bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*140,vy:Math.sin(a)*140,radius:10,damage:bd,piercing:0,hitEnemies:new Set(),isCrit:false,life:4.0,fromBoss:true});}
+                        }
+                    }
+                }else if(boss.bossType==='twins_fire'){
+                    if(dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+                    boss.fireTrailTimer=(boss.fireTrailTimer||0)+dt;
+                    if(boss.fireTrailTimer>=0.3){boss.fireTrailTimer=0;
+                        magicZones.push({x:boss.x,y:boss.y,radius:25,warningTime:0,activeTime:2.0,damage:Math.floor(2*getBossStatScale().dmgMult),phase:'active',timer:0});}
+                }else if(boss.bossType==='twins_ice'){
+                    let pref=250;
+                    if(dist>pref+50&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+                    else if(dist<pref-50&&dist>0.01){let mv=boss.speed*dt*0.7;boss.x-=(dx/dist)*mv;boss.y-=(dy/dist)*mv;}
+                    boss.attackTimer+=dt;
+                    if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){boss.attackTimer=0;
+                        let sd=getBossStatScale().dmgMult;let ba=Math.atan2(dy,dx);
+                        for(let i=0;i<3;i++){let a=ba+(i-1)*0.25;
+                            bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,radius:7,damage:Math.floor(3*sd),piercing:0,hitEnemies:new Set(),isCrit:false,life:3.5,fromBoss:true,slows:true});}}
+                }else if(boss.bossType==='archmage'){
+    let hpPct=boss.health/boss.maxHealth;
+    let sd=getBossStatScale().dmgMult;
+    if(hpPct>0.6){
+        // Phase 1: cycle fire/ice/lightning, stay at range
+        let pref=300;
+        if(dist>pref+50&&dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+        else if(dist<pref-50&&dist>0.01){let mv=boss.speed*dt*0.7;boss.x-=(dx/dist)*mv;boss.y-=(dy/dist)*mv;}
+        boss.attackTimer+=dt;
+        if(boss.attackTimer>=boss.attackInterval*getBossCDMult()){boss.attackTimer=0;
+            let phase=(boss.attackPhase||0)%3;boss.attackPhase=(boss.attackPhase||0)+1;
+            let ba=Math.atan2(dy,dx);
+            if(phase===0){// Fire burst
+                for(let i=0;i<6;i++){let a=ba+(i/5-0.5)*1.2;
+                    bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*250,vy:Math.sin(a)*250,radius:6,damage:Math.floor(3*sd),piercing:0,hitEnemies:new Set(),isCrit:false,life:2.5,fromBoss:true});}
+                addFloatingText('🔥',boss.x,boss.y-40,'#ff4422');
+            }else if(phase===1){// Ice zone
+                magicZones.push({x:player.x,y:player.y,radius:80,warningTime:1.0,activeTime:1.5,damage:Math.floor(4*sd),phase:'warning',timer:0});
+                addFloatingText('❄️',boss.x,boss.y-40,'#4488ff');
+            }else{// Lightning - instant line
+                if(dist>0.01){let ldmg=Math.floor(5*sd);
+                    if(Math.hypot(player.x-boss.x,player.y-boss.y)<400)tryDodgeOrDamage(ldmg);
+                    addFloatingText('⚡',boss.x,boss.y-40,'#ffff44');screenShakeTimer=0.1;screenShakeIntensity=4;}
+            }
+        }
+    }else if(hpPct>0.3){
+        // Phase 2: aggressive + mirror clones
+        if(dist>0.01){let mv=boss.speed*dt*1.5;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+        if(!boss.cloneSpawned){boss.cloneSpawned=true;
+            for(let ci=0;ci<2;ci++){let ca=Math.random()*Math.PI*2,cd=80;
+                bosses.push({x:boss.x+Math.cos(ca)*cd,y:boss.y+Math.sin(ca)*cd,radius:boss.radius*0.7,health:1,maxHealth:1,speed:boss.speed*1.2,isBoss:true,bossType:'archmage',
+                    attackTimer:0,attackInterval:boss.attackInterval*1.5,contactDamage:2,chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:0,
+                    teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0,isClone:true,cloneSpawned:true});}
+            addFloatingText('👥 镜像分身!',boss.x,boss.y-50,'#ff88ff');
+        }
+        boss.attackTimer+=dt;
+        if(boss.attackTimer>=boss.attackInterval*getBossCDMult()*0.7){boss.attackTimer=0;
+            let ba=Math.atan2(dy,dx);
+            for(let i=0;i<8;i++){let a=(i/8)*Math.PI*2;
+                bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*180,vy:Math.sin(a)*180,radius:5,damage:Math.floor(2*sd),piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}}
+    }else{
+        // Phase 3: all elements, teleport, shrink, aura
+        if(!boss.phase3Init){boss.phase3Init=true;boss.radius=Math.max(20,boss.radius*0.7);boss.speed*=1.8;addFloatingText('⚠️ 最终形态!',boss.x,boss.y-50,'#ff44ff');}
+        boss.teleportCooldown-=dt;
+        if(boss.teleportCooldown<=0){boss.teleportCooldown=3;let ta=Math.random()*Math.PI*2,td=200+Math.random()*100;boss.x=player.x+Math.cos(ta)*td;boss.y=player.y+Math.sin(ta)*td;}
+        if(dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
+        // Damaging aura
+        if(dist<120+boss.radius)tryDodgeOrDamage(Math.floor(1*sd));
+        boss.attackTimer+=dt;
+        if(boss.attackTimer>=boss.attackInterval*getBossCDMult()*0.5){boss.attackTimer=0;
+            let ba=Math.atan2(dy,dx);
+            for(let i=0;i<12;i++){let a=(i/12)*Math.PI*2;
+                bullets.push({x:boss.x,y:boss.y,vx:Math.cos(a)*200,vy:Math.sin(a)*200,radius:5,damage:Math.floor(3*sd),piercing:0,hitEnemies:new Set(),isCrit:false,life:3.0,fromBoss:true});}
+            magicZones.push({x:player.x,y:player.y,radius:70,warningTime:0.8,activeTime:1.0,damage:Math.floor(5*sd),phase:'warning',timer:0});
+        }
+    }
+}
             }
 
             // Magic zones
@@ -899,30 +1307,59 @@
                             radius:player.bulletSize,damage:cdmg,piercing:0,hitEnemies:new Set(),isCrit:false,life:2.0,fromBoss:false});}}}
             }
 
+// Friendly ghosts
+for(let i=friendlyGhosts.length-1;i>=0;i--){
+    let g=friendlyGhosts[i];g.timer-=dt;if(g.timer<=0){friendlyGhosts.splice(i,1);continue;}
+    g.shootTimer-=dt;
+    let ne=findNearestEnemy();
+    if(ne){let gdx=ne.x-g.x,gdy=ne.y-g.y,gd=Math.hypot(gdx,gdy);
+        if(gd>30&&gd<400){g.x+=(gdx/gd)*120*dt;g.y+=(gdy/gd)*120*dt;}
+        if(g.shootTimer<=0&&gd<300){g.shootTimer=0.8;let gdmg=player.damage*(0.4+SKILL_MODS.cloneDmgMult);
+            bullets.push({x:g.x,y:g.y,vx:(gdx/gd)*player.bulletSpeed*0.6,vy:(gdy/gd)*player.bulletSpeed*0.6,
+                radius:4,damage:gdmg,piercing:0,hitEnemies:new Set(),isCrit:false,life:2.0,fromBoss:false,weaponType:'soulBolt'});}}
+}
+// Recent deaths decay
+for(let i=recentDeaths.length-1;i>=0;i--){recentDeaths[i].timer-=dt;if(recentDeaths[i].timer<=0)recentDeaths.splice(i,1);}
+
             // Bullets
             for(let i=bullets.length-1;i>=0;i--){
                 let b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(b.life<=0){bullets.splice(i,1);continue;}
                 if(!b.fromBoss){
                     let hit=false;
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);
+if(e.type==='teleporter'&&(e.teleportInvuln||0)>0){b.hitEnemies.add(e);continue;}
+if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAngle+Math.PI*3)%(Math.PI*2))-Math.PI);if(da<Math.PI/4){addFloatingText('🛡',e.x,e.y-15,'#8888cc');b.hitEnemies.add(e);continue;}}
+                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;
                         if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
                         if(e.health<=0){
                             if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0});}}
-                            spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
+                            if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});recentDeaths.push({x:e.x,y:e.y,timer:5});}
+                            flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
-                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
+                        if(e.health<=0){if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});}flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
-                        bs.health-=b.damage;b.hitEnemies.add(bs);if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
-                        if(bs.health<=0){spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);bosses.splice(j,1);killCount++;bossKillCount++;player.comboCount++;player.comboTimer=2;
+                        let bDmg=b.damage;
+                        if(bs.bossType==='juggernaut'){
+                            let ba2=Math.atan2(b.vy,b.vx),fa=Math.atan2(player.y-bs.y,player.x-bs.x);
+                            let da2=Math.abs(((ba2-fa+Math.PI*3)%(Math.PI*2))-Math.PI);
+                            if(da2>Math.PI/2)bDmg*=0.7;
+                            bDmg=Math.max(1,bDmg-(bs.armor||0));
+                        }
+                        bs.health-=bDmg;b.hitEnemies.add(bs);showDmg(bs,bDmg,b.isCrit);runStats.damageDealt+=bDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.max(1,Math.round(b.damage*player.lifesteal)));
+                        if(bs.health<=0){flushDmg(bs);bosses.splice(j,1);if(bs.isClone){spawnDeathParticles(bs.x,bs.y,bs.radius,'#ff88ff',8);continue;}spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);killCount++;bossKillCount++;player.pacifistTimer=0;
+                            if(bs.bossType==='twins_fire'||bs.bossType==='twins_ice'){
+                                for(let ob of bosses){if((ob.bossType==='twins_fire'||ob.bossType==='twins_ice')&&ob!==bs){
+                                    ob.speed*=1.5;ob.attackInterval*=0.5;ob.health=ob.maxHealth;ob.enraged=true;
+                                    addFloatingText('💢 双子暴怒!',ob.x,ob.y-50,'#ff4444');screenShakeTimer=0.3;screenShakeIntensity=10;}}}
+                            player.comboCount++;player.comboTimer=2;
                             let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];shopRefreshCount=0;
                             let role=ROLES[selectedRole];
                             if(role&&role.skill&&skillLevel<MAX_SKILL_LEVEL){skillUpOptions=generateSkillUpOptions();gameState=STATE_SKILL_UP;}
-                            else{gameState=STATE_SHOP;}}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                            else{gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;}}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(hit){bullets.splice(i,1);continue;}
-                }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);bullets.splice(i,1);continue;}}
+                }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);if(b.slows)player.slowTimer=2.0;bullets.splice(i,1);continue;}}
             }
 
             // XP orbs (magnet/vacuum attraction + combo multiplier)
@@ -951,7 +1388,7 @@
                         tryDodgeOrDamage(Math.floor(Math.max(3,Math.floor(e.radius))*eDmgScale));
                         addFloatingText("💥",e.x,e.y,"#ff8800");screenShakeTimer=0.15;screenShakeIntensity=6;
                         spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
-                    }else{tryDodgeOrDamage(Math.floor(Math.max(1,Math.floor(e.radius/5))*eDmgScale));}
+                    }else{let cdmg=e.type==='teleporter'?Math.floor(Math.max(3,e.radius)*eDmgScale):Math.floor(Math.max(1,Math.floor(e.radius/5))*eDmgScale);tryDodgeOrDamage(cdmg);}
                 }
             }
             // Player vs elites
@@ -965,19 +1402,21 @@
             for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
             // Particles
             for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vx*=0.95;p.vy*=0.95;if(p.life<=0)particles.splice(i,1);}
-            checkLevelUp();updateUI();
+            for(let[e,a]of dmgAccum){a.timer-=dt;if(a.timer<=0){let col=a.crits>0?'#ff4444':'#ffffff';let txt=Math.round(a.total).toString();if(a.crits>0)txt='💥'+txt;addFloatingText(txt,a.x,a.y-20,col);dmgAccum.delete(e);}}
+            checkLevelUp();updateUI();if(Math.floor(gameTime*2)%6===0)checkAchievements();
         }
 
         // ---------- DRAW ----------
         function draw(){
             ctx.clearRect(0,0,W,H);
+            if(voidMode){ctx.fillStyle='rgba(60,0,80,0.15)';ctx.fillRect(0,0,W,H);}
             // Screen shake offset
             let shX=0,shY=0;
-            if(screenShakeTimer>0){let fade=Math.min(1,screenShakeTimer/0.15);shX=(Math.random()-0.5)*screenShakeIntensity*2*fade;shY=(Math.random()-0.5)*screenShakeIntensity*2*fade;}
+            if(screenShakeTimer>0){let sm=gameSettings.screenShake==='off'?0:gameSettings.screenShake==='low'?0.3:gameSettings.screenShake==='high'?1.5:1;let fade=Math.min(1,screenShakeTimer/0.15);shX=(Math.random()-0.5)*screenShakeIntensity*2*fade*sm;shY=(Math.random()-0.5)*screenShakeIntensity*2*fade*sm;}
             ctx.save();ctx.translate(shX,shY);
 
             // Grid
-            ctx.strokeStyle="#202a33";ctx.lineWidth=1;
+            ctx.strokeStyle=voidMode?"#301840":"#202a33";ctx.lineWidth=1;
             let sx=Math.floor(worldOffsetX/40)*40-worldOffsetX,sy=Math.floor(worldOffsetY/40)*40-worldOffsetY;
             for(let i=sx;i<W;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
             for(let i=sy;i<H;i+=40){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
@@ -1001,6 +1440,10 @@
                 ctx.beginPath();ctx.arc(x,y,PLAYER_RADIUS,0,Math.PI*2);ctx.fillStyle=`rgba(187,119,255,${al*0.5})`;ctx.shadowColor='#9944ff';ctx.shadowBlur=15;ctx.fill();ctx.shadowBlur=0;
                 ctx.strokeStyle=`rgba(187,119,255,${al*0.7})`;ctx.lineWidth=2;ctx.stroke();}
 
+// Friendly ghosts
+for(let g of friendlyGhosts){let{x,y}=w2s(g.x,g.y);let al=Math.min(1,g.timer/1.0)*0.6;
+    ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fillStyle=`rgba(68,204,136,${al})`;ctx.shadowColor='#22ff66';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;}
+
             // XP orbs
             for(let o of xpOrbs){let{x,y}=w2s(o.x,o.y);ctx.beginPath();ctx.arc(x,y,o.radius,0,Math.PI*2);ctx.fillStyle="#f7d44a";ctx.shadowColor="#ffb347";ctx.shadowBlur=12;ctx.fill();}
 
@@ -1010,6 +1453,7 @@
                 else if(b.weaponType==='arrow'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffdd44':'#88ff88';ctx.shadowColor=b.isCrit?'#ff8800':'#44ff44';ctx.shadowBlur=10;ctx.beginPath();ctx.moveTo(b.radius+4,0);ctx.lineTo(-b.radius,-3);ctx.lineTo(-b.radius,3);ctx.closePath();ctx.fill();ctx.restore();}
                 else if(b.weaponType==='orb'){ctx.beginPath();ctx.arc(x,y,b.radius,0,Math.PI*2);ctx.fillStyle=b.isCrit?'#ffcc66':`rgba(100,140,255,${0.6+0.3*Math.sin(Date.now()/100)})`;ctx.shadowColor=b.isCrit?'#ff8800':'#4466ff';ctx.shadowBlur=18;ctx.fill();}
                 else if(b.weaponType==='dagger'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));ctx.fillStyle=b.isCrit?'#ffaa66':'#cc99ff';ctx.shadowColor=b.isCrit?'#ff8800':'#9944ff';ctx.shadowBlur=8;ctx.fillRect(-4,-2,8,4);ctx.restore();}
+                else if(b.weaponType==='soulBolt'){ctx.beginPath();ctx.arc(x,y,b.radius,0,Math.PI*2);ctx.fillStyle=b.isCrit?'#88ffaa':'#44cc88';ctx.shadowColor='#22ff66';ctx.shadowBlur=14;ctx.fill();}
                 else if(b.weaponType==='swordEnergy'){ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(b.vy,b.vx));
                     ctx.fillStyle=b.isCrit?'#ffcc44':'#ff9944';ctx.shadowColor=b.isCrit?'#ffaa00':'#cc6600';ctx.shadowBlur=14;
                     ctx.beginPath();ctx.moveTo(b.radius+6,0);ctx.lineTo(0,-b.radius);ctx.lineTo(-b.radius*0.5,0);ctx.lineTo(0,b.radius);ctx.closePath();ctx.fill();ctx.restore();}
@@ -1034,7 +1478,12 @@
                 // Type indicator for special enemies
                 if(e.type==='shooter'){ctx.fillStyle="#fff";ctx.font="10px monospace";ctx.textAlign="center";ctx.fillText("🔫",x,y+4);ctx.textAlign="left";}
                 if(e.type==='tank'){ctx.fillStyle="#aaffaa";ctx.font="10px monospace";ctx.textAlign="center";ctx.fillText("🛡",x,y+4);ctx.textAlign="left";}
+if(e.type==='shielded'){let sa=e.shieldAngle||0;ctx.save();ctx.translate(x,y);ctx.rotate(sa+Math.PI);ctx.beginPath();ctx.arc(0,0,e.radius+4,-Math.PI/4,Math.PI/4);ctx.strokeStyle='#aaaaff';ctx.lineWidth=3;ctx.stroke();ctx.restore();}
+if(e.type==='healer'){ctx.fillStyle="#44ff44";ctx.font="10px monospace";ctx.textAlign="center";ctx.fillText("✚",x,y+4);ctx.textAlign="left";if((e.healTimer||0)>2.5){ctx.beginPath();ctx.arc(x,y,e.radius+8,0,Math.PI*2);ctx.strokeStyle='rgba(68,187,68,0.5)';ctx.lineWidth=2;ctx.stroke();}}
+if(e.type==='swarm'){ctx.beginPath();ctx.arc(x,y,e.radius,0,Math.PI*2);ctx.fillStyle='#aacc55';ctx.shadowColor='#ccff66';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;}
+if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalAlpha=0.5+pulse*0.5;ctx.beginPath();ctx.arc(x,y,e.radius,0,Math.PI*2);ctx.fillStyle='#cc44cc';ctx.shadowColor='#ff66ff';ctx.shadowBlur=16;ctx.fill();ctx.shadowBlur=0;ctx.globalAlpha=1.0;}
                 if((e.frozen||0)>0){ctx.beginPath();ctx.arc(x,y,e.radius+2,0,Math.PI*2);ctx.fillStyle='rgba(100,150,255,0.35)';ctx.fill();}
+                if(e.marked){ctx.beginPath();ctx.arc(x,y,e.radius+3,0,Math.PI*2);ctx.strokeStyle='rgba(68,204,136,0.6)';ctx.lineWidth=1.5;ctx.stroke();}
             }
 
             // Elites
@@ -1052,6 +1501,9 @@
                     ctx.beginPath();ctx.arc(x,y,bs.radius+6+Math.sin(Date.now()/80)*4,0,Math.PI*2);ctx.strokeStyle=`rgba(255,80,30,${0.4+wProg*0.4})`;ctx.lineWidth=3;ctx.stroke();ctx.restore();
                 }
                 if(bs.bossType==='berserker'&&bs.isCharging){ctx.beginPath();ctx.arc(x,y,bs.radius+8,0,Math.PI*2);ctx.strokeStyle='rgba(255,100,50,0.7)';ctx.lineWidth=4;ctx.stroke();}
+                if(bs.bossType==='summoner'){let pulse=0.5+0.3*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(x,y,bs.radius+10,0,Math.PI*2);ctx.strokeStyle=`rgba(204,136,0,${pulse})`;ctx.lineWidth=2;ctx.stroke();if(!bs.hasAbsorbed&&bs.health<bs.maxHealth*0.3){ctx.fillStyle='rgba(255,0,0,0.3)';ctx.beginPath();ctx.arc(x,y,bs.radius+20,0,Math.PI*2);ctx.fill();}}
+                if(bs.bossType==='juggernaut'){if(bs.enraged){let pulse=0.5+0.5*Math.sin(Date.now()/100);ctx.beginPath();ctx.arc(x,y,bs.radius+6,0,Math.PI*2);ctx.strokeStyle=`rgba(255,50,50,${pulse})`;ctx.lineWidth=4;ctx.stroke();}ctx.fillStyle='#aaffaa';ctx.font='10px monospace';ctx.textAlign='center';ctx.fillText('🛡'+((bs.armor||0)),x,y+4);ctx.textAlign='left';}
+                if(bs.bossType==='archmage'){let hpPct=bs.health/bs.maxHealth;if(hpPct<=0.3){let pulse=0.5+0.5*Math.sin(Date.now()/80);ctx.beginPath();ctx.arc(x,y,120,0,Math.PI*2);ctx.strokeStyle=`rgba(255,68,255,${pulse*0.3})`;ctx.lineWidth=2;ctx.stroke();}if(bs.isClone){ctx.globalAlpha=0.5;ctx.beginPath();ctx.arc(x,y,bs.radius,0,Math.PI*2);ctx.strokeStyle='#ff88ff';ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;}}
                 if((bs.frozen||0)>0){ctx.beginPath();ctx.arc(x,y,bs.radius+3,0,Math.PI*2);ctx.fillStyle='rgba(100,150,255,0.25)';ctx.fill();}
                 ctx.fillStyle="#fff";ctx.font="bold 14px monospace";ctx.textAlign="center";ctx.fillText(bt.name,x,y-bs.radius-20);
                 let bw=bs.radius*2.5,bh=6,bx=x-bw/2,by=y-bs.radius-14;ctx.fillStyle="#333";ctx.fillRect(bx,by,bw,bh);ctx.fillStyle=bt.color;ctx.fillRect(bx,by,bw*(bs.health/bs.maxHealth),bh);ctx.strokeStyle="#666";ctx.lineWidth=1;ctx.strokeRect(bx,by,bw,bh);ctx.textAlign="left";}
@@ -1110,6 +1562,8 @@
                 ctx.fillStyle=cCol;ctx.font='bold 16px monospace';ctx.fillText(`连击 x${player.comboCount} ${cMult}`,W/2-60,30);
             }
             // Horde warning
+            if(gameMode==='bossRush'){ctx.fillStyle='#ffd966';ctx.font='bold 14px monospace';ctx.fillText('🏆 BOSS RUSH',W/2-60,55);}
+            if(voidMode){ctx.fillStyle='#9944ff';ctx.font='bold 14px monospace';ctx.fillText('☠️ 虚空模式',W/2-60,70);}
             if(hordeWarning>0){ctx.fillStyle='#ff5555';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`⚠️ 大波敌人 ${Math.ceil(hordeWarning)}s`,W/2,H/2-50);ctx.textAlign='left';}
 
             // Particles
@@ -1154,13 +1608,36 @@
             // Paused
             if(gameState===STATE_PAUSED){ctx.fillStyle="#000000aa";ctx.fillRect(0,0,W,H);ctx.font="56px 'Courier New'";ctx.fillStyle="#dddddd";ctx.textAlign="center";ctx.fillText("⏸ 暂停",W/2,280);ctx.font="24px monospace";ctx.fillStyle="#b5a87d";ctx.fillText(controlMode==='touch'?"点击屏幕继续":`按 ${keyMap.pause.toUpperCase()} 继续`,W/2,360);ctx.textAlign="left";}
             // Game over
-            if(gameState===STATE_GAMEOVER){ctx.fillStyle="#000000cc";ctx.fillRect(0,0,W,H);ctx.font="56px 'Courier New'";ctx.fillStyle="#e05a5a";ctx.textAlign="center";ctx.fillText("💔 熄灭了",W/2,280);ctx.font="28px monospace";ctx.fillStyle="#b5a87d";ctx.fillText(controlMode==='touch'?"点击屏幕重新开始":"点击 [重来] 再试一次",W/2,380);ctx.textAlign="left";}
+            if(gameState===STATE_GAMEOVER){
+    ctx.fillStyle="#000000dd";ctx.fillRect(0,0,W,H);
+    ctx.textAlign="center";
+    ctx.font="bold 40px 'Courier New'";ctx.fillStyle="#e05a5a";ctx.fillText("💔 熄灭了",W/2,80);
+    ctx.font="18px monospace";ctx.fillStyle="#fadf9e";
+    let h=Math.floor(gameTime/3600),mn=Math.floor((gameTime%3600)/60),sc=Math.floor(gameTime%60);
+    let timeStr=`${h.toString().padStart(2,'0')}:${mn.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
+    let col1x=W/2-180,col2x=W/2+20,ly=130,lh=30;
+    ctx.textAlign="left";ctx.fillStyle="#cbad8e";ctx.font="16px monospace";
+    ctx.fillText("⏱️ 存活时间",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(timeStr,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("⚡ 等级",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+player.level,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("💀 击杀数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+killCount,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("👑 Boss击杀",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+bossKillCount,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("💰 金币获得",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.goldEarned,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("🔮 灵魂石",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText("+"+(Math.floor(gameTime/60)*3+player.level+bossKillCount*5),col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("⚔️ 总伤害",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+Math.round(runStats.damageDealt),col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("🔥 最高连击",col1x,ly);ctx.fillStyle="#ffaa44";ctx.fillText("x"+runStats.highestCombo,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("💥 暴击次数",col1x,ly);ctx.fillStyle="#ff4444";ctx.fillText(""+runStats.totalCrits,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("📈 升级次数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.upgradesTaken,col2x,ly);ly+=lh;
+    if(activeMutators.length>0){ly+=lh;ctx.fillStyle="#cbad8e";ctx.fillText("⚙️ 变体",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText(activeMutators.length+'个',col2x,ly);}
+    ctx.textAlign="center";ctx.font="20px monospace";ctx.fillStyle="#b5a87d";
+    ctx.fillText(controlMode==='touch'?"点击屏幕重新开始":"点击 [重来] 再试一次",W/2,ly+30);ctx.textAlign="left";
+}
 
             ctx.restore(); // End screen shake
 
             // --- HUD elements drawn WITHOUT shake ---
 
             // Minimap (top-right)
+            if(gameSettings.minimap){
             const mmW=150,mmH=100,mmX=W-mmW-15,mmY=15,mmRange=800;
             const mmScale=mmW/(mmRange*2);
             ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fillRect(mmX,mmY,mmW,mmH);ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.strokeRect(mmX,mmY,mmW,mmH);
@@ -1171,6 +1648,7 @@
             for(let c of chests){if(c.isOpen)continue;let mx=mmX+mmW/2+(c.x-player.x)*mmScale,my=mmY+mmH/2+(c.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#00ccaa';ctx.fillRect(mx-2,my-2,4,4);}}
             // Player dot on minimap
             ctx.fillStyle='#ffffff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);
+            }
 
             // Live leaderboard (top-left, no shake)
             let lb=getLiveLeaderboard();
@@ -1232,6 +1710,7 @@
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            updateAchievePopup(dt);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
             if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
             // Sync leaderboard with Supabase
@@ -1258,7 +1737,7 @@
 
         // Back to menu (keep nickname, refresh unlocks)
         function backToMenu(){
-            checkUnlocks();buildRoleSelect();buildPermUpgrades();
+            checkUnlocks();buildRoleSelect();buildPermUpgrades();buildAchievements();
             gameWrapper.style.display='none';startScreen.style.display='flex';
             document.body.classList.remove('touch-mode');
             if(gameLoop){cancelAnimationFrame(gameLoop);gameLoop=null;}
@@ -1267,6 +1746,8 @@
         // Start screen
         function startGame(mode){
             controlMode=mode;
+            gameMode=document.getElementById('bossRushCheck').checked?'bossRush':'normal';
+            activeMutators=[];document.querySelectorAll('#mutatorChecks input[type=checkbox]:checked').forEach(cb=>{activeMutators.push(cb.dataset.mutator);});
             let nickEl=document.getElementById('nickInput');playerNickname=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
             startScreen.style.display='none';gameWrapper.style.display=mode==='touch'?'flex':'block';
             if(mode==='touch'){document.body.classList.add('touch-mode');if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{});if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});}
