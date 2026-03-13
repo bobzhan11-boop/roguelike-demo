@@ -869,7 +869,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             if(ci<0||ci>=chests.length)return;let ch=chests[ci];if(ch.isOpen)return;ch.isOpen=true;
             const items=[
                 {n:'❤️ 回血30%',f:()=>{let h=Math.floor(player.maxHp*0.3);player.hp=Math.min(player.maxHp,player.hp+h);addFloatingText(`+${h} HP`,player.x,player.y-30,"#ff8888");}},
-                {n:'💪 攻击力+1',f:()=>{player.damage+=1;addFloatingText("攻击+1",player.x,player.y-30,"#ffaa66");}},
+                {n:'💪 攻击力+2',f:()=>{player.damage+=2;addFloatingText("攻击+2",player.x,player.y-30,"#ffaa66");}},
                 {n:'🏹 子弹+1',f:()=>{player.bulletCount=Math.min(10,player.bulletCount+1);addFloatingText("子弹+1",player.x,player.y-30,"#66ccff");}},
                 {n:'⚡ 攻速提升',f:()=>{player.fireInterval=Math.max(0.08,player.fireInterval-0.03);addFloatingText("攻速提升",player.x,player.y-30,"#aadd66");}},
                 {n:'🔫 子弹大小+2',f:()=>{player.bulletSize+=2;addFloatingText("子弹大小+2",player.x,player.y-30,"#ffaa88");}},
@@ -902,18 +902,18 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
             if(wep==='sword'){
                 // Short-range arc slash
-                let sr=60+player.bulletSize*2,dmg=player.damage*1.4;
+                let sr=85+player.bulletSize*2,dmg=player.damage*1.4;
                 let crit=Math.random()<player.critChance;if(crit)dmg*=player.critDamage;
                 for(let j=enemies.length-1;j>=0;j--){let e=enemies[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
                     let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
-                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
-                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;showDmg(e,dmg,crit);runStats.damageDealt+=dmg;if(crit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
+                        if(e.health<=0){flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let j=elites.length-1;j>=0;j--){let e=elites[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
                     let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
-                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
-                        if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;showDmg(e,dmg,crit);runStats.damageDealt+=dmg;if(crit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
+                        if(e.health<=0){if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});}flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let bs of bosses){let d=Math.hypot(bs.x-player.x,bs.y-player.y),ea=Math.atan2(bs.y-player.y,bs.x-player.x);
-                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);}}
+                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;showDmg(bs,dmg,crit);runStats.damageDealt+=dmg;if(crit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);}}
                 player.skillActive={type:'swordSlash',timer:0.15,angle:ba,range:sr};
             }else if(wep==='arrow'){
                 // Manual aim arrow
@@ -957,7 +957,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
             const pool=[
                 {name:'❤️ 最大生命 +8',apply:p=>{p.maxHp+=8;p.hp+=8;}},
-                {name:'⚡ 伤害 +1',apply:p=>{p.damage+=1+Math.floor(p.level/5)*0.5;}},
+                {name:'⚡ 伤害 +2',apply:p=>{p.damage+=2+Math.floor(p.level/5)*0.5;}},
                 {name:'👟 速度+1',apply:p=>{p.speedBonus+=1;}},
                 {name:'🌀 闪避+1',apply:p=>{p.dodge+=1;}},
                 {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},
