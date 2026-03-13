@@ -1553,7 +1553,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             ctx.fillStyle="#ffffffcc";ctx.font="14px monospace";
             ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,100);
             let extraStats=`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`;
-            if(player.lifesteal>0)extraStats+=` 吸血:${Math.round(player.lifesteal*100)}%`;
+            if(player.lifesteal>0)extraStats+=` 吸血:${(player.lifesteal*100).toFixed(1)}%`;
             if(player.thorns>0)extraStats+=` 反伤:${player.thorns}`;
             ctx.fillText(extraStats,20,118);
             // Combo indicator
