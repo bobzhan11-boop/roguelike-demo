@@ -325,7 +325,7 @@
             {id:'crit50pct',name:'暴击专家',desc:'暴击率达50%',icon:'🎯',reward:5,check:()=>player.critChance>=0.5},
             {id:'proj6',name:'弹幕大师',desc:'拥有6+投射物',icon:'🏹',reward:5,check:()=>player.bulletCount>=6},
             {id:'speed400',name:'闪电侠',desc:'速度达400',icon:'⚡',reward:5,check:()=>getFinalSpeed()>=400},
-            {id:'lifesteal10',name:'吸血鬼',desc:'生命窃取10%',icon:'🩸',reward:5,check:()=>player.lifesteal>=0.10},
+            {id:'lifesteal3',name:'吸血鬼',desc:'生命窃取3%',icon:'🩸',reward:5,check:()=>player.lifesteal>=0.03},
             {id:'allRoles',name:'全能战士',desc:'每个角色存活10分钟',icon:'🌟',reward:20,check:()=>{let b=loadBests();return Object.keys(ROLES).every(k=>b[k]&&b[k].time>=600);}},
             {id:'role20min',name:'角色大师',desc:'每角色存活20分钟',icon:'👑',reward:25,check:()=>{let b=loadBests();return Object.keys(ROLES).every(k=>b[k]&&b[k].time>=1200);}},
         ];
@@ -923,11 +923,13 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                     bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed*1.3,vy:by*player.bulletSpeed*1.3,
                         radius:player.bulletSize,damage:player.damage*dm,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:2.5,fromBoss:false,weaponType:'arrow'});}
             }else if(wep==='orb'){
-                // Slow piercing orb
-                let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
-                bullets.push({x:player.x+Math.cos(ba)*(player.radius+3),y:player.y+Math.sin(ba)*(player.radius+3),
-                    vx:Math.cos(ba)*player.bulletSpeed*0.5,vy:Math.sin(ba)*player.bulletSpeed*0.5,
-                    radius:player.bulletSize+4,damage:player.damage*dm*1.8,piercing:player.piercing+2,hitEnemies:new Set(),isCrit:crit,life:4.0,fromBoss:false,weaponType:'orb'});
+                // Slow piercing orbs
+                for(let i=0;i<bc;i++){
+                    let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp;
+                    let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
+                    bullets.push({x:player.x+Math.cos(a)*(player.radius+3),y:player.y+Math.sin(a)*(player.radius+3),
+                        vx:Math.cos(a)*player.bulletSpeed*0.5,vy:Math.sin(a)*player.bulletSpeed*0.5,
+                        radius:player.bulletSize+4,damage:player.damage*dm*1.8,piercing:player.piercing+2,hitEnemies:new Set(),isCrit:crit,life:4.0,fromBoss:false,weaponType:'orb'});}
             }else if(wep==='dagger'){
                 // Fast short-range burst
                 for(let i=0;i<bc+1;i++){
@@ -961,7 +963,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                 {name:'💥 暴击率 +4%',apply:p=>{p.critChance=Math.min(0.8,p.critChance+0.04);}},
                 {name:'🗡️ 暴击伤害 +30%',apply:p=>{p.critDamage+=0.3;}},
                 {name:'🧲 磁铁范围 +40',apply:p=>{p.magnetRange=Math.min(200,p.magnetRange+40);}},
-                {name:'🩸 生命窃取 +2%',apply:p=>{p.lifesteal=Math.min(0.12,p.lifesteal+0.02);}},
+                {name:'🩸 生命窃取 +0.5%',apply:p=>{p.lifesteal=Math.min(0.12,p.lifesteal+0.005);}},
                 {name:'🦔 反伤 +2',apply:p=>{p.thorns+=2;}},
             ];
             // Weapon-specific upgrades
