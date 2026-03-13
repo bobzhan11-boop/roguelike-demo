@@ -719,7 +719,7 @@
         }
 
         function updateUI(){
-            hpSpan.textContent=`${Math.max(0,player.hp)}/${player.maxHp}`;levelSpan.textContent=player.level;
+            hpSpan.textContent=`${Math.max(0,player.hp%1?player.hp.toFixed(1):player.hp)}/${player.maxHp}`;levelSpan.textContent=player.level;
             expSpan.textContent=`${Math.floor(player.exp)}/${player.nextExp}`;killSpan.textContent=killCount;goldSpan.textContent=player.gold;
             let h=Math.floor(gameTime/3600),m=Math.floor((gameTime%3600)/60),s=Math.floor(gameTime%60);
             timeSpan.textContent=`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
@@ -906,14 +906,14 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                 let crit=Math.random()<player.critChance;if(crit)dmg*=player.critDamage;
                 for(let j=enemies.length-1;j>=0;j--){let e=enemies[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
                     let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
-                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(dmg*player.lifesteal));
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
                         if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let j=elites.length-1;j>=0;j--){let e=elites[j],d=Math.hypot(e.x-player.x,e.y-player.y),ea=Math.atan2(e.y-player.y,e.x-player.x);
                     let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);
-                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(dmg*player.lifesteal));
+                    if(d<sr+e.radius&&da<0.8){e.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);
                         if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let bs of bosses){let d=Math.hypot(bs.x-player.x,bs.y-player.y),ea=Math.atan2(bs.y-player.y,bs.x-player.x);
-                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(dmg*player.lifesteal));}}
+                    let da=Math.abs(((ea-ba+Math.PI*3)%(Math.PI*2))-Math.PI);if(d<sr+bs.radius&&da<0.8){bs.health-=dmg;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+dmg*player.lifesteal);}}
                 player.skillActive={type:'swordSlash',timer:0.15,angle:ba,range:sr};
             }else if(wep==='arrow'){
                 // Manual aim arrow
@@ -1331,14 +1331,14 @@ for(let i=recentDeaths.length-1;i>=0;i--){recentDeaths[i].timer-=dt;if(recentDea
 if(e.type==='teleporter'&&(e.teleportInvuln||0)>0){b.hitEnemies.add(e);continue;}
 if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAngle+Math.PI*3)%(Math.PI*2))-Math.PI);if(da<Math.PI/4){addFloatingText('🛡',e.x,e.y-15,'#8888cc');b.hitEnemies.add(e);continue;}}
                         e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;
-                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(b.damage*player.lifesteal));
+                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
                         if(e.health<=0){
                             if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0});}}
                             if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});recentDeaths.push({x:e.x,y:e.y,timer:5});}
                             flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(b.damage*player.lifesteal));
+                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
                         if(e.health<=0){if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});}flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
                         let bDmg=b.damage;
@@ -1348,7 +1348,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                             if(da2>Math.PI/2)bDmg*=0.7;
                             bDmg=Math.max(1,bDmg-(bs.armor||0));
                         }
-                        bs.health-=bDmg;b.hitEnemies.add(bs);showDmg(bs,bDmg,b.isCrit);runStats.damageDealt+=bDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+Math.round(b.damage*player.lifesteal));
+                        bs.health-=bDmg;b.hitEnemies.add(bs);showDmg(bs,bDmg,b.isCrit);runStats.damageDealt+=bDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
                         if(bs.health<=0){flushDmg(bs);bosses.splice(j,1);if(bs.isClone){spawnDeathParticles(bs.x,bs.y,bs.radius,'#ff88ff',8);continue;}spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);killCount++;bossKillCount++;player.pacifistTimer=0;
                             if(bs.bossType==='twins_fire'||bs.bossType==='twins_ice'){
                                 for(let ob of bosses){if((ob.bossType==='twins_fire'||ob.bossType==='twins_ice')&&ob!==bs){
