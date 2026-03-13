@@ -501,7 +501,7 @@
 
         // Boss types
         const BOSS_TYPES={
-            berserker:{name:'狂战士',color:'#cc2222',glow:'#ff4444',speedMult:1.8,healthMult:1.3,radiusMult:1.3,contactDamage:8,attackInterval:3.0},
+            berserker:{name:'狂战士',color:'#cc2222',glow:'#ff4444',speedMult:1.4,healthMult:1.3,radiusMult:1.3,contactDamage:8,attackInterval:3.0},
             ranger:{name:'游侠',color:'#22aa55',glow:'#44ff88',speedMult:0.7,healthMult:1.0,radiusMult:0.9,contactDamage:3,attackInterval:1.8},
             sorcerer:{name:'巫师',color:'#7744cc',glow:'#aa66ff',speedMult:0.5,healthMult:0.9,radiusMult:1.0,contactDamage:4,attackInterval:2.5},
             summoner:{name:'召唤师',color:'#cc8800',glow:'#ffaa00',speedMult:0.6,healthMult:0.7,radiusMult:1.0,contactDamage:3,attackInterval:4.0},
@@ -719,7 +719,7 @@
         }
 
         function updateUI(){
-            hpSpan.textContent=`${Math.max(0,player.hp).toFixed(1)}/${player.maxHp}`;levelSpan.textContent=player.level;
+            hpSpan.textContent=`${Math.floor(Math.max(0,player.hp))}/${player.maxHp}`;levelSpan.textContent=player.level;
             expSpan.textContent=`${Math.floor(player.exp)}/${player.nextExp}`;killSpan.textContent=killCount;goldSpan.textContent=player.gold;
             let h=Math.floor(gameTime/3600),m=Math.floor((gameTime%3600)/60),s=Math.floor(gameTime%60);
             timeSpan.textContent=`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
@@ -818,7 +818,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             let x=player.x+Math.cos(a)*500,y=player.y+Math.sin(a)*500;
             bosses.push({x,y,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:true,bossType:tk,
                 attackTimer:0,attackInterval:bt.attackInterval,contactDamage:bt.contactDamage,
-                chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:spd*3,
+                chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:spd*2,
                 teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0});
             if(tk==='juggernaut'){let b=bosses[bosses.length-1];b.armor=3;}
             addFloatingText(`💀 ${bt.name} BOSS!`,x,y-50,bt.color);if(!firstBossSpawnTime)firstBossSpawnTime=now;lastBossSpawnTime=now;lastBossLevel=player.level;
@@ -1007,7 +1007,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
         function generateShopItems(){
             let pool=[
                 {name:'❤️ 回血50%',price:shopPrice(30),effect:()=>{player.hp=Math.min(player.maxHp,player.hp+player.maxHp*0.5);}},
-                {name:'💪 攻击力+2',price:shopPrice(45),effect:()=>{player.damage+=2;}},
+                {name:'💪 攻击力+3',price:shopPrice(45),effect:()=>{player.damage+=3;}},
                 {name:'💖 最大生命+15',price:shopPrice(45),effect:()=>{player.maxHp+=15;player.hp+=15;}},
                 {name:'🗡️ 暴击伤害+30%',price:shopPrice(55),effect:()=>{player.critDamage+=0.3;}},
             ];
