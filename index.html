@@ -9,27 +9,27 @@
         body { background:#0b0e14; min-height:100vh; display:flex; justify-content:center; align-items:center; font-family:'Courier New',Courier,monospace; touch-action:manipulation; }
 
         /* Start Screen */
-        #startScreen { position:fixed; top:0;left:0;right:0;bottom:0; background:#0b0e14; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:200; color:#fadf9e; }
-        #startScreen h1 { font-size:3rem; margin-bottom:8px; text-shadow:0 0 20px #aa8b6e; }
-        #startScreen h2 { font-size:1.2rem; color:#7e8a9a; margin-bottom:40px; }
-        .mode-buttons { display:flex; gap:30px; flex-wrap:wrap; justify-content:center; }
-        .mode-btn { background:#1a1f2b; border:3px solid #6b4f3a; border-radius:20px; padding:30px 40px; color:#fadf9e; font-family:inherit; font-size:1.3rem; font-weight:bold; cursor:pointer; transition:0.15s; min-width:220px; text-align:center; }
+        #startScreen { position:fixed; top:0;left:0;right:0;bottom:0; background:#0b0e14; display:flex; flex-direction:column; align-items:center; z-index:200; color:#fadf9e; overflow-y:auto; padding:20px 10px; }
+        #startScreen h1 { font-size:2.5rem; margin-bottom:4px; text-shadow:0 0 20px #aa8b6e; }
+        #startScreen h2 { font-size:1rem; color:#7e8a9a; margin-bottom:15px; }
+        .mode-buttons { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+        .mode-btn { background:#1a1f2b; border:3px solid #6b4f3a; border-radius:16px; padding:16px 30px; color:#fadf9e; font-family:inherit; font-size:1.1rem; font-weight:bold; cursor:pointer; transition:0.15s; min-width:200px; text-align:center; }
         .mode-btn:hover { background:#262d3a; border-color:#aa8b6e; transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.5); }
         .mode-btn small { display:block; color:#7e8a9a; font-size:0.85rem; margin-top:8px; font-weight:normal; }
-        .nick-row { margin-bottom:30px; display:flex; align-items:center; gap:12px; }
+        .nick-row { margin-bottom:12px; display:flex; align-items:center; gap:12px; }
         .nick-row label { color:#cbad8e; font-size:1.1rem; }
         #nickInput { background:#10131f; border:2px solid #6b4f3a; border-radius:12px; padding:8px 16px; color:#fadf9e; font-family:inherit; font-size:1.1rem; width:180px; text-align:center; outline:none; }
         #nickInput:focus { border-color:#aa8b6e; }
-        .role-select { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:25px; max-width:780px; }
-        .role-card { background:#1a1f2b; border:3px solid #3a3025; border-radius:14px; padding:12px 8px; width:135px; text-align:center; cursor:pointer; transition:0.15s; }
+        .role-select { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; max-width:850px; }
+        .role-card { background:#1a1f2b; border:3px solid #3a3025; border-radius:14px; padding:8px 6px; width:120px; text-align:center; cursor:pointer; transition:0.15s; }
         .role-card:hover:not(.locked) { border-color:#aa8b6e; transform:translateY(-2px); }
         .role-card.selected { border-color:#ffd966; box-shadow:0 0 12px rgba(255,217,102,0.3); }
         .role-card.locked { opacity:0.4; cursor:not-allowed; }
-        .role-card .dot { width:24px; height:24px; border-radius:50%; margin:0 auto 6px; }
-        .role-card .rname { color:#fadf9e; font-size:0.95rem; font-weight:bold; }
-        .role-card .rdesc { color:#7e8a9a; font-size:0.7rem; margin-top:3px; }
-        .role-card .rskill { color:#aaddff; font-size:0.75rem; margin-top:4px; }
-        .role-card .rlock { color:#ff6655; font-size:0.65rem; margin-top:5px; line-height:1.3; }
+        .role-card .dot { width:20px; height:20px; border-radius:50%; margin:0 auto 4px; }
+        .role-card .rname { color:#fadf9e; font-size:0.85rem; font-weight:bold; }
+        .role-card .rdesc { color:#7e8a9a; font-size:0.65rem; margin-top:2px; }
+        .role-card .rskill { color:#aaddff; font-size:0.65rem; margin-top:2px; }
+        .role-card .rlock { color:#ff6655; font-size:0.6rem; margin-top:3px; line-height:1.2; }
 
         /* Game */
         .game-wrapper { width:100%; max-width:min(1200px,95vw,calc((100vh - 150px)/0.6)); padding:10px; display:none; }
@@ -79,9 +79,10 @@
             <button onclick="switchTab('history')" id="tabHistory" style="background:#1a1f2b;border:2px solid #3a3025;border-radius:8px;padding:6px 16px;color:#7e8a9a;font-family:inherit;font-size:0.85rem;cursor:pointer">📜 历史</button>
             <button onclick="switchTab('achievements')" id="tabAchievements" style="background:#1a1f2b;border:2px solid #3a3025;border-radius:8px;padding:6px 16px;color:#7e8a9a;font-family:inherit;font-size:0.85rem;cursor:pointer">🏅 成就</button>
         </div>
-        <div id="permUpgradeSection" style="margin:10px 0;max-width:600px;width:100%">
+        <div id="permUpgradeSection" style="margin:6px 0;max-width:780px;width:100%">
             <div style="color:#b366ff;font-size:14px;margin-bottom:6px">🔮 灵魂石强化 <span id="permGoldDisplay" style="color:#b366ff"></span></div>
-            <div id="permUpgradeList" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center"></div>
+            <div id="permUpgradeList" style="display:flex;flex-wrap:nowrap;gap:4px;justify-content:center"></div>
+            <div id="prestigeSlot"></div>
         </div>
         <div id="historySection" style="display:none;margin:10px 0;max-width:700px;width:100%">
             <div style="color:#cbad8e;font-size:16px;margin-bottom:8px">📜 最近记录</div>
@@ -245,28 +246,28 @@
         loadMeta();loadPerms();checkUnlocks();
 
         function buildPermUpgrades(){
-            let el=document.getElementById('permUpgradeList');el.innerHTML='';
+            let el=document.getElementById('permUpgradeList');el.innerHTML='';let ps2=document.getElementById('prestigeSlot');if(ps2)ps2.innerHTML='';
             document.getElementById('permGoldDisplay').textContent=`(🔮 ${metaStats.soulStones||0}${metaStats.prestigeLevel>0?' ✨觉醒Lv'+metaStats.prestigeLevel:''})`;
             PERM_UPGRADES.forEach((u,idx)=>{
                 let lv=permLevels[u.key]||0,maxed=lv>=u.max,cost=maxed?'MAX':u.cost(lv);
                 let btn=document.createElement('button');
-                btn.style.cssText='background:#1a1a2e;color:#ddd;border:1px solid '+(maxed?'#446':'#b366ff')+';padding:4px 8px;border-radius:6px;font-size:12px;cursor:'+(maxed?'default':'pointer')+';min-width:90px;';
+                btn.style.cssText='background:#1a1a2e;color:#ddd;border:1px solid '+(maxed?'#446':'#b366ff')+';padding:3px 6px;border-radius:6px;font-size:11px;cursor:'+(maxed?'default':'pointer')+';flex:1 1 0;min-width:0;max-width:125px;';
                 btn.innerHTML=`${u.name} <span style="color:#aaa">${lv}/${u.max}</span><br><span style="color:#888;font-size:10px">${u.desc}</span><br><span style="color:#b366ff">${maxed?'已满':cost+'🔮'}</span>`;
                 if(!maxed)btn.addEventListener('click',()=>{if(buyPerm(idx)){buildPermUpgrades();}});
                 el.appendChild(btn);
             });
             if((metaStats.soulStones||0)>=500||(metaStats.prestigeLevel||0)>0){
                 let btn=document.createElement('button');
-                btn.style.cssText='background:#2a0a3e;color:#ddb0ff;border:2px solid #9944ff;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;margin-top:8px;width:100%;';
-                btn.innerHTML=`✨ 觉醒 (Prestige Lv${metaStats.prestigeLevel||0}) <span style="color:#888;font-size:11px">重置强化, 永久+5%全属性 (需500🔮)</span>`;
+                btn.style.cssText='background:#2a0a3e;color:#ddb0ff;border:2px solid #9944ff;padding:4px 10px;border-radius:8px;font-size:12px;cursor:pointer;margin-top:6px;width:100%;';
+                btn.innerHTML=`✨ 觉醒 Lv${metaStats.prestigeLevel||0} <span style="color:#888;font-size:10px">重置强化, +5%全属性 (500🔮)</span>`;
                 btn.addEventListener('click',()=>{
-                    if(metaStats.soulStones<500){addFloatingText&&addFloatingText('灵魂石不足',0,0,'#ff5555');return;}
+                    if(metaStats.soulStones<500){alert('灵魂石不足');return;}
                     if(!confirm('确定要觉醒? 将重置所有强化等级!'))return;
                     metaStats.soulStones-=500;metaStats.prestigeLevel=(metaStats.prestigeLevel||0)+1;
                     permLevels={permHp:0,permDmg:0,permSpd:0,permCrit:0,permArmor:0,permRegen:0};
                     savePerms();saveMeta();buildPermUpgrades();
                 });
-                el.appendChild(btn);
+                let ps=document.getElementById('prestigeSlot');ps.innerHTML='';ps.appendChild(btn);
             }
         }
         function buildRoleSelect(){
