@@ -211,7 +211,7 @@
             ranger:{name:'游侠',color:'#44dd66',glow:'#22ff44',hpMult:0.7,dmgMult:1.3,spdMult:1.0,fireRateMult:1.0,dodgeBase:0,piercingBase:0,skill:'arrowRain',skillName:'箭雨',skillCD:10,desc:'高伤害 · 远程AOE',weapon:'arrow',locked:true,unlockKey:'bestTime',unlockVal:600,unlockDesc:'单次存活10分钟'},
             mage:{name:'法师',color:'#6688ff',glow:'#4466ff',hpMult:0.8,dmgMult:1.1,spdMult:0.8,fireRateMult:1.3,dodgeBase:0,piercingBase:1,skill:'frostNova',skillName:'冰冻新星',skillCD:12,desc:'控制型 · 自带穿透',weapon:'orb',locked:true,unlockKey:'totalBossKills',unlockVal:3,unlockDesc:'累计击杀3个Boss'},
             shadow:{name:'影刺',color:'#bb77ff',glow:'#9944ff',hpMult:0.6,dmgMult:1.1,spdMult:1.3,fireRateMult:1.0,dodgeBase:1,piercingBase:0,skill:'shadowClone',skillName:'分身',skillCD:15,desc:'高闪避 · 召唤分身',weapon:'dagger',locked:true,unlockKey:'bestTime',unlockVal:900,unlockDesc:'单次存活15分钟'},
-            necromancer:{name:'死灵',color:'#44cc88',glow:'#22ff66',hpMult:0.75,dmgMult:1.0,spdMult:0.9,fireRateMult:1.1,dodgeBase:0,piercingBase:1,skill:'raiseDead',skillName:'亡灵复苏',skillCD:20,desc:'穿透+标记·召唤亡灵',weapon:'soulBolt',locked:true,unlockKey:'totalBossKills',unlockVal:10,unlockDesc:'累计击杀10个Boss'},
+            necromancer:{name:'死灵',color:'#44cc88',glow:'#22ff66',hpMult:0.8,dmgMult:1.0,spdMult:1.0,fireRateMult:1.2,dodgeBase:0,piercingBase:1,skill:'raiseDead',skillName:'亡灵复苏',skillCD:20,desc:'穿透+标记·召唤亡灵',weapon:'soulBolt',locked:true,unlockKey:'totalBossKills',unlockVal:10,unlockDesc:'累计击杀10个Boss'},
         };
         let selectedRole='dot';
         let playerZones=[],clones=[],friendlyGhosts=[],recentDeaths=[];
@@ -493,7 +493,7 @@
         const PLAYER_RADIUS=12,BASE_SPEED=220,BASE_MAX_HP=20,BASE_DAMAGE=2.0,BASE_FIRE_INTERVAL=0.28;
         const BASE_BULLET_SPEED=480,BASE_BULLET_COUNT=1,BASE_CRIT_CHANCE=0.05,BASE_CRIT_DAMAGE=1.5;
         const BASE_PIERCING=0,BULLET_SIZE=5,INVINCIBLE_DURATION=0.7;
-        const DODGE_DIMINISH_FACTOR=0.3,SPEED_DIMINISH_FACTOR=0.4,MAX_DODGE_CHANCE=0.65;
+        const DODGE_DIMINISH_FACTOR=0.2,SPEED_DIMINISH_FACTOR=0.4,MAX_DODGE_CHANCE=0.4;
         const BASE_EXP_NEXT=100,EXP_INCREASE_PER_LEVEL=70;
 
         // Dash constants
@@ -964,7 +964,6 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                 {name:'🗡️ 暴击伤害 +30%',apply:p=>{p.critDamage+=0.3;}},
                 {name:'🧲 磁铁范围 +40',apply:p=>{p.magnetRange=Math.min(200,p.magnetRange+40);}},
                 {name:'🩸 生命窃取 +0.5%',apply:p=>{p.lifesteal=Math.min(0.12,p.lifesteal+0.005);}},
-                {name:'🦔 反伤 +2',apply:p=>{p.thorns+=2;}},
             ];
             // Weapon-specific upgrades
             if(wep==='sword'){
@@ -988,10 +987,10 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
     pool.push({name:'💀 施法速度',apply:p=>{p.fireInterval=Math.max(0.1,p.fireInterval-0.03);}});
     pool.push({name:'💀 穿透+1',apply:p=>{p.piercing+=1;}});
             }else{
-                pool.push({name:'🏹 子弹数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
-                pool.push({name:'📈 射速 -0.03s',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}});
-                pool.push({name:'🎯 穿透 +1',apply:p=>{p.piercing+=1;}});
-                pool.push({name:'🔫 子弹大小 +3',apply:p=>{p.bulletSize+=3;}});
+                pool.push({name:'🔵 光弹数 +1',apply:p=>{p.bulletCount=Math.min(10,p.bulletCount+1);}});
+                pool.push({name:'🔵 射速提升',apply:p=>{p.fireInterval=Math.max(0.08,p.fireInterval-0.03);}});
+                pool.push({name:'🔵 穿透 +1',apply:p=>{p.piercing+=1;}});
+                pool.push({name:'🔵 弹幕大小 +3',apply:p=>{p.bulletSize+=3;}});
             }
             return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
         }
@@ -1006,14 +1005,17 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
         // Shop
         function shopPrice(base){return Math.floor(base*(1+Math.floor(player.level/3)*0.4));}
         function generateShopItems(){
-            return[{name:'❤️ 回血50%',price:shopPrice(30),effect:()=>{player.hp=Math.min(player.maxHp,player.hp+player.maxHp*0.5);}},
-                {name:'💪 攻击力+2',price:shopPrice(45),effect:()=>{player.damage+=2;}},{name:'🏹 子弹数+1',price:shopPrice(60),effect:()=>{player.bulletCount=Math.min(10,player.bulletCount+1);}},
-                {name:'⚡ 攻速提升',price:shopPrice(50),effect:()=>{player.fireInterval=Math.max(0.08,player.fireInterval-0.04);}},
-                {name:'💥 暴击率+5%',price:shopPrice(45),effect:()=>{player.critChance=Math.min(0.8,player.critChance+0.05);}},
+            let pool=[
+                {name:'❤️ 回血50%',price:shopPrice(30),effect:()=>{player.hp=Math.min(player.maxHp,player.hp+player.maxHp*0.5);}},
+                {name:'💪 攻击力+2',price:shopPrice(45),effect:()=>{player.damage+=2;}},
+                {name:'💖 最大生命+15',price:shopPrice(45),effect:()=>{player.maxHp+=15;player.hp+=15;}},
                 {name:'🗡️ 暴击伤害+30%',price:shopPrice(55),effect:()=>{player.critDamage+=0.3;}},
-                {name:'🎯 穿透+1',price:shopPrice(40),effect:()=>{player.piercing+=1;}},
-                {name:'💖 最大生命+15',price:shopPrice(45),effect:()=>{player.maxHp+=15;player.hp+=15;}}
-            ].sort(()=>Math.random()-0.5).slice(0,3);
+            ];
+            if(player.bulletCount<10)pool.push({name:'🏹 子弹数+1',price:shopPrice(60),effect:()=>{player.bulletCount=Math.min(10,player.bulletCount+1);}});
+            if(player.fireInterval>0.08)pool.push({name:'⚡ 攻速提升',price:shopPrice(50),effect:()=>{player.fireInterval=Math.max(0.08,player.fireInterval-0.04);}});
+            if(player.critChance<0.8)pool.push({name:'💥 暴击率+5%',price:shopPrice(45),effect:()=>{player.critChance=Math.min(0.8,player.critChance+0.05);}});
+            pool.push({name:'🎯 穿透+1',price:shopPrice(40),effect:()=>{player.piercing+=1;}});
+            return pool.sort(()=>Math.random()-0.5).slice(0,3);
         }
         function refreshShop(){if(gameState!==STATE_SHOP)return;let c=10*Math.pow(2,shopRefreshCount);if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
         function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;updateUI();}
@@ -1385,7 +1387,6 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                 let e=enemies[j],dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy),md=player.radius+e.radius;
                 if(dist<md){
                     if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}
-                    if(player.thorns>0){e.health-=player.thorns;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;continue;}}
                     let eDmgScale=getMonsterStatsByLevel().dmgMult;
                     if(e.type==='exploder'){
                         tryDodgeOrDamage(Math.floor(Math.max(3,Math.floor(e.radius))*eDmgScale));
@@ -1532,7 +1533,6 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                     ctx.fillStyle=`rgba(150,200,255,${sa.timer*0.2})`;ctx.fill();}
             }
             // Thorns visual
-            if(player.thorns>0){let ta=0.15+0.1*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+3,0,Math.PI*2);ctx.strokeStyle=`rgba(255,150,50,${ta})`;ctx.lineWidth=1.5;ctx.stroke();}
             // Damage flash
             if(player.damageFlash>0){let al=Math.min(1,player.damageFlash/0.3);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+5,0,Math.PI*2);ctx.strokeStyle=`rgba(255,40,40,${al*0.8})`;ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius,0,Math.PI*2);ctx.fillStyle=`rgba(255,0,0,${al*0.35})`;ctx.fill();}
             // Aim line (keyboard only)
@@ -1556,7 +1556,6 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             ctx.fillText(`暴击:${Math.round(player.critChance*100)}% 爆伤:${Math.round(player.critDamage*100)}% 穿透:${player.piercing}`,20,100);
             let extraStats=`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`;
             if(player.lifesteal>0)extraStats+=` 吸血:${(player.lifesteal*100).toFixed(1)}%`;
-            if(player.thorns>0)extraStats+=` 反伤:${player.thorns}`;
             ctx.fillText(extraStats,20,118);
             // Combo indicator
             if(player.comboCount>=3){
