@@ -47,13 +47,19 @@ function upgradeLayout(contentY) {
   const uy = contentY + H*0.045;
   return {upgW,upgH,startX,uy};
 }
+// Overlay panel: same proportions as HTML (pnX=200,pnY=150,pnW=600,pnH=320 on 1000x600)
 function overlayLayout() {
-  const pnW=W*0.7, pnH=H*0.8, pnX=(W-pnW)/2, pnY=(H-pnH)/2;
-  return {pnW,pnH,pnX,pnY};
+  const pnX=W*0.2, pnY=H*0.25, pnW=W*0.6, pnH=H*0.533;
+  return {pnX,pnY,pnW,pnH};
 }
-function pauseBtnLayout() {
-  const bW=W*0.38, bH=H*0.12, bX=(W-bW)/2;
-  return {bW, bH, resumeY:H*0.48, backY:H*0.64};
+// Shop touch buttons row (bottom of overlay)
+function shopBtnLayout(pnX, pnY, pnW, pnH) {
+  const rbY = pnY+pnH-H*0.1;
+  return {
+    refreshX:pnX+pnW*0.1, refreshW:pnW*0.23,
+    leaveX:pnX+pnW*0.58, leaveW:pnW*0.23,
+    rbY, rbH:H*0.05
+  };
 }
 
 // --- Round rect helper ---
@@ -66,13 +72,12 @@ function rr(x,y,w,h,r) {
   ctx.closePath();
 }
 
-// --- Draw a styled button (HTML-matching brown style) ---
+// --- Draw a styled button (only used for menu start button) ---
 function drawBtn(x,y,w,h,label,textCol,bgCol,borderCol,fontSize) {
   ctx.fillStyle = bgCol||'#6d4f3a';
   ctx.strokeStyle = borderCol||'#3a2c1e';
   ctx.lineWidth = 3;
   rr(x,y,w,h,14); ctx.fill(); ctx.stroke();
-  // Bottom shadow line (matches HTML border-bottom effect)
   ctx.fillStyle = borderCol||'#3a2c1e';
   rr(x+3,y+h-5,w-6,6,4); ctx.fill();
   ctx.fillStyle = textCol||'#faeac6';
@@ -86,7 +91,6 @@ function drawBtn(x,y,w,h,label,textCol,bgCol,borderCol,fontSize) {
 
 // ===== DRAW MENU =====
 function drawMenu() {
-  // Background
   ctx.fillStyle='#0b0e14'; ctx.fillRect(0,0,W,H);
   const {cx,roles,cardW,cardH,cardsX,cardsY,tabY,tabW,tabH,tabs,tabsX,contentY,btnW,btnH,btnX,btnY} = menuLayout();
 
@@ -108,23 +112,18 @@ function drawMenu() {
     ctx.lineWidth = sel?3:1.5;
     rr(rx,cardsY,cardW,cardH,12); ctx.fill(); ctx.stroke();
     if(sel){ctx.shadowColor='rgba(255,217,102,0.3)';ctx.shadowBlur=12;rr(rx,cardsY,cardW,cardH,12);ctx.stroke();ctx.shadowBlur=0;}
-    // Role dot icon
     ctx.beginPath(); ctx.arc(rx+cardW/2, cardsY+cardH*0.18, 12, 0, Math.PI*2);
     ctx.fillStyle=r.color; ctx.shadowColor=r.glow; ctx.shadowBlur=14; ctx.fill(); ctx.shadowBlur=0;
-    // Name
     ctx.fillStyle='#fadf9e'; ctx.font=`bold ${H*0.027}px sans-serif`; ctx.textAlign='center';
     ctx.fillText(r.name, rx+cardW/2, cardsY+cardH*0.38);
-    // Desc lines
     ctx.fillStyle='#7e8a9a'; ctx.font=`${H*0.019}px sans-serif`;
     r.desc.split('·').forEach((d,di)=>ctx.fillText(d.trim(), rx+cardW/2, cardsY+cardH*0.52+di*H*0.026));
-    // Skill name
     if(r.skill){ctx.fillStyle='#aaddff'; ctx.font=`${H*0.018}px sans-serif`; ctx.fillText(r.skillName, rx+cardW/2, cardsY+cardH*0.78);}
-    // Lock
     if(locked){ctx.fillStyle='#ff6655'; ctx.font=`${H*0.015}px sans-serif`; ctx.fillText('🔒', rx+cardW/2, cardsY+cardH*0.9);}
     ctx.globalAlpha=1;
   });
 
-  // Soul stones (above tabs)
+  // Soul stones
   ctx.fillStyle='#b366ff'; ctx.font=`bold ${H*0.025}px sans-serif`; ctx.textAlign='center';
   ctx.fillText(`🔮 灵魂石: ${S.metaStats.soulStones}`, cx, tabY-H*0.01);
 
@@ -144,7 +143,7 @@ function drawMenu() {
   else if(menuTab==='history') drawHistoryTab(contentY);
   else drawAchievementsTab(contentY);
 
-  // Start button — HTML mode-btn style
+  // Start button
   drawBtn(btnX, btnY, btnW, btnH, '▶  开始游戏', '#fadf9e', '#1a1f2b', '#6b4f3a', H*0.042);
 
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
@@ -176,7 +175,6 @@ function drawHistoryTab(contentY) {
     ctx.fillStyle='#7e8a9a'; ctx.font=`${H*0.025}px sans-serif`; ctx.textAlign='center';
     ctx.fillText('暂无记录', W/2, contentY+H*0.08); ctx.textAlign='left'; return;
   }
-  // Box background
   ctx.fillStyle='rgba(26,31,43,0.7)'; ctx.strokeStyle='#3a3025'; ctx.lineWidth=1;
   rr(W*0.06, contentY+H*0.02, W*0.88, Math.min(history.length,5)*H*0.045+H*0.02, 8);
   ctx.fill(); ctx.stroke();
@@ -185,10 +183,8 @@ function drawHistoryTab(contentY) {
     const role=D.ROLES[run.role], rn=role?role.name:run.role;
     const m=Math.floor(run.time/60), s=run.time%60;
     const ry = contentY+H*0.055+i*H*0.045;
-    // Role color dot
     if(role){ctx.beginPath();ctx.arc(W*0.1,ry-H*0.012,5,0,Math.PI*2);ctx.fillStyle=role.color;ctx.fill();}
-    ctx.fillStyle='#cbad8e';
-    ctx.fillText(`${rn}`, W*0.115, ry);
+    ctx.fillStyle='#cbad8e'; ctx.fillText(`${rn}`, W*0.115, ry);
     ctx.fillStyle='#fadf9e';
     ctx.fillText(`${m}:${s.toString().padStart(2,'0')}  Lv${run.level}  💀${run.kills}  👑${run.bossKills}  +${run.soulStones}🔮`, W*0.23, ry);
   });
@@ -206,10 +202,8 @@ function drawAchievementsTab(contentY) {
     rr(ax,ay,aw,ah,6); ctx.fill(); ctx.stroke();
     ctx.fillStyle=isUnlocked?'#fadf9e':'#555566'; ctx.font=`${H*0.022}px sans-serif`; ctx.textAlign='center';
     ctx.fillText(a.icon, ax+aw/2, ay+ah*0.38);
-    ctx.font=`${H*0.017}px sans-serif`;
-    ctx.fillText(a.name, ax+aw/2, ay+ah*0.62);
+    ctx.font=`${H*0.017}px sans-serif`; ctx.fillText(a.name, ax+aw/2, ay+ah*0.62);
     ctx.fillStyle=isUnlocked?'#aaddaa':'#3a3a4a'; ctx.font=`${H*0.014}px sans-serif`;
-    // wrap long desc
     const desc=a.desc.length>8?a.desc.slice(0,8)+'…':a.desc;
     ctx.fillText(desc, ax+aw/2, ay+ah*0.82);
     if(isUnlocked){ctx.fillStyle='#ffd966';ctx.font=`${H*0.013}px sans-serif`;ctx.fillText(`+${a.reward}🔮`,ax+aw/2,ay+ah*0.95);}
@@ -319,106 +313,116 @@ function draw() {
   for(let ft of G.floatingTexts){const{x,y}=w2s(ft.x,ft.y);ctx.globalAlpha=ft.life;ctx.font=`bold ${H*0.027}px sans-serif`;ctx.fillStyle=ft.color;ctx.fillText(ft.text,x,y-(1-ft.life)*20);}
   ctx.globalAlpha=1;ctx.textAlign='left';
 
-  // ---- Overlay screens ----
-  const {pnW,pnH,pnX,pnY}=overlayLayout();
+  // ---- Overlay screens (HTML-matching style: simple fillRect panels) ----
+  const {pnX,pnY,pnW,pnH}=overlayLayout();
 
   // UPGRADE screen
   if(G.gameState===D.STATE_UPGRADE&&G.upgradeOptions.length===3){
-    ctx.fillStyle='rgba(15,23,42,0.93)';rr(pnX,pnY,pnW,pnH,16);ctx.fill();
-    ctx.strokeStyle='#c79a6e';ctx.lineWidth=4;rr(pnX,pnY,pnW,pnH,16);ctx.stroke();
-    ctx.fillStyle='#f7e3b2';ctx.font=`bold ${H*0.058}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillText('⚡ 升级选择', W/2, pnY+H*0.1);
-    G.upgradeOptions.forEach((opt,i)=>{
-      const by=pnY+H*0.17+i*H*0.19, bh=H*0.15;
-      ctx.fillStyle='#1e2533';ctx.strokeStyle='#c7b087';ctx.lineWidth=1.5;rr(pnX+pnW*0.08,by,pnW*0.84,bh,10);ctx.fill();ctx.stroke();
-      ctx.fillStyle='#f0dbb4';ctx.font=`bold ${H*0.034}px sans-serif`;
-      ctx.textBaseline='middle';ctx.fillText(opt.name, W/2, by+bh/2);ctx.textBaseline='alphabetic';
-    });
-    ctx.fillStyle='#7e8a9a';ctx.font=`${H*0.024}px sans-serif`;ctx.fillText('点击选择升级', W/2, pnY+pnH-H*0.04);
-    ctx.textAlign='left';}
+    ctx.fillStyle='#0f172ad9'; ctx.fillRect(pnX,pnY,pnW,pnH);
+    ctx.strokeStyle='#c79a6e'; ctx.lineWidth=6; ctx.strokeRect(pnX,pnY,pnW,pnH);
+    ctx.font=`bold ${H*0.057}px sans-serif`; ctx.fillStyle='#f7e3b2'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText('⚡ 升级选择', W/2, pnY+H*0.117);
+    ctx.font=`${H*0.043}px sans-serif`; ctx.textBaseline='middle';
+    ctx.textAlign='right';
+    for(let i=0;i<3;i++){ctx.fillStyle='#c7b087';ctx.fillText(`[${i+1}]`,pnX+pnW*0.15,pnY+H*0.217+i*H*0.1);}
+    ctx.textAlign='left';
+    for(let i=0;i<3;i++){ctx.fillStyle='#f0dbb4';ctx.fillText(G.upgradeOptions[i].name,pnX+pnW*0.18,pnY+H*0.217+i*H*0.1);}
+    ctx.textBaseline='alphabetic'; ctx.textAlign='center';
+    ctx.font=`${H*0.03}px sans-serif`; ctx.fillStyle='#b5c9b0';
+    ctx.fillText('点击选项进行选择', W/2, pnY+pnH-H*0.04);
+    ctx.textAlign='left';
+  }
 
   // SKILL UP screen
   if(G.gameState===D.STATE_SKILL_UP&&G.skillUpOptions.length===3){
-    ctx.fillStyle='rgba(15,10,30,0.93)';rr(pnX,pnY,pnW,pnH,16);ctx.fill();
-    ctx.strokeStyle='#aa66ff';ctx.lineWidth=4;rr(pnX,pnY,pnW,pnH,16);ctx.stroke();
+    ctx.fillStyle='#1a0a2ad9'; ctx.fillRect(pnX,pnY,pnW,pnH);
+    ctx.strokeStyle='#aa66ff'; ctx.lineWidth=6; ctx.strokeRect(pnX,pnY,pnW,pnH);
     const role=D.ROLES[G.selectedRole];
-    ctx.fillStyle='#ddb0ff';ctx.font=`bold ${H*0.052}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillText(`✨ ${role.skillName} Lv${G.skillLevel+1}`, W/2, pnY+H*0.1);
-    ctx.fillStyle='#9988aa';ctx.font=`${H*0.022}px sans-serif`;
-    ctx.fillText(`技能等级 ${G.skillLevel}/${D.MAX_SKILL_LEVEL}`, W/2, pnY+H*0.14);
-    G.skillUpOptions.forEach((opt,i)=>{
-      const by=pnY+H*0.18+i*H*0.19, bh=H*0.15;
-      ctx.fillStyle='#1e1530';ctx.strokeStyle='#aa66ff';ctx.lineWidth=1.5;rr(pnX+pnW*0.08,by,pnW*0.84,bh,10);ctx.fill();ctx.stroke();
-      ctx.fillStyle='#e0c0ff';ctx.font=`bold ${H*0.034}px sans-serif`;
-      ctx.textBaseline='middle';ctx.fillText(opt.name, W/2, by+bh/2);ctx.textBaseline='alphabetic';
-    });
-    ctx.fillStyle='#9988aa';ctx.font=`${H*0.024}px sans-serif`;ctx.fillText('点击选择技能强化', W/2, pnY+pnH-H*0.04);
-    ctx.textAlign='left';}
+    ctx.font=`bold ${H*0.057}px sans-serif`; ctx.fillStyle='#ddb0ff'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText(`✨ ${role.skillName} Lv${G.skillLevel+1}`, W/2, pnY+H*0.117);
+    ctx.font=`${H*0.03}px sans-serif`; ctx.fillStyle='#aa88cc';
+    ctx.fillText(`技能等级 ${G.skillLevel}/${D.MAX_SKILL_LEVEL}`, W/2, pnY+H*0.167);
+    ctx.font=`${H*0.043}px sans-serif`; ctx.textBaseline='middle';
+    ctx.textAlign='right';
+    for(let i=0;i<3;i++){ctx.fillStyle='#aa88cc';ctx.fillText(`[${i+1}]`,pnX+pnW*0.15,pnY+H*0.217+i*H*0.1);}
+    ctx.textAlign='left';
+    for(let i=0;i<3;i++){ctx.fillStyle='#e0c0ff';ctx.fillText(G.skillUpOptions[i].name,pnX+pnW*0.18,pnY+H*0.217+i*H*0.1);}
+    ctx.textBaseline='alphabetic'; ctx.textAlign='center';
+    ctx.font=`${H*0.03}px sans-serif`; ctx.fillStyle='#b5a0d0';
+    ctx.fillText('点击选项强化技能', W/2, pnY+pnH-H*0.04);
+    ctx.textAlign='left';
+  }
 
   // SHOP screen
   if(G.gameState===D.STATE_SHOP){
-    ctx.fillStyle='rgba(10,18,28,0.93)';rr(pnX,pnY,pnW,pnH,16);ctx.fill();
-    ctx.strokeStyle='#ffd966';ctx.lineWidth=4;rr(pnX,pnY,pnW,pnH,16);ctx.stroke();
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillStyle='#f7e3b2';ctx.font=`bold ${H*0.058}px sans-serif`;ctx.fillText('🏪 神秘商店', W/2, pnY+H*0.1);
-    ctx.fillStyle='#ffd966';ctx.font=`bold ${H*0.032}px sans-serif`;ctx.fillText(`💰 ${player.gold}`, W/2, pnY+H*0.155);
-    G.shopItems.forEach((it,i)=>{
-      const by=pnY+H*0.2+i*H*0.16, bh=H*0.13;
-      ctx.fillStyle=it?'#1a2218':'#181818';ctx.strokeStyle=it?'#6b4f3a':'#3a3025';ctx.lineWidth=1.5;rr(pnX+pnW*0.08,by,pnW*0.84,bh,10);ctx.fill();ctx.stroke();
-      ctx.fillStyle=it?'#f0dbb4':'#555566';ctx.font=`bold ${H*0.031}px sans-serif`;
-      ctx.textBaseline='middle';ctx.fillText(it?`${it.name}   ${it.price}💰`:'— 已售罄 —', W/2, by+bh/2);ctx.textBaseline='alphabetic';
-    });
+    ctx.fillStyle='#1e2a3ad9'; ctx.fillRect(pnX,pnY,pnW,pnH);
+    ctx.strokeStyle='#ffd966'; ctx.lineWidth=6; ctx.strokeRect(pnX,pnY,pnW,pnH);
+    ctx.font=`bold ${H*0.057}px sans-serif`; ctx.fillStyle='#f7e3b2'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText('🏪 神秘商店', W/2, pnY+H*0.117);
+    ctx.font=`${H*0.033}px sans-serif`; ctx.fillStyle='#ffd966';
+    ctx.fillText(`💰 ${player.gold}`, W/2, pnY+H*0.167);
+    ctx.font=`${H*0.043}px sans-serif`; ctx.textBaseline='middle';
+    ctx.textAlign='right';
+    for(let i=0;i<3;i++){ctx.fillStyle='#c7b087';ctx.fillText(`[${i+1}]`,pnX+pnW*0.15,pnY+H*0.217+i*H*0.1);}
+    ctx.textAlign='left';
+    for(let i=0;i<3;i++){let it=G.shopItems[i];
+      if(it){ctx.fillStyle='#f0dbb4';ctx.fillText(`${it.name}  ${it.price}💰`,pnX+pnW*0.18,pnY+H*0.217+i*H*0.1);}
+      else{ctx.fillStyle='#888888';ctx.fillText('已售罄',pnX+pnW*0.18,pnY+H*0.217+i*H*0.1);}
+    }
+    ctx.textBaseline='alphabetic';
+    const {refreshX,refreshW,leaveX,leaveW,rbY,rbH}=shopBtnLayout(pnX,pnY,pnW,pnH);
     const rc=10*Math.pow(2,G.shopRefreshCount);
-    const rbY=pnY+pnH-H*0.14, rbH=H*0.1, rbW=pnW*0.42;
-    drawBtn(pnX+pnW*0.05, rbY, rbW, rbH, `🔄 刷新 ${rc}💰`, '#b5c9b0', '#1e2a1e', '#3a5a3a', H*0.028);
-    drawBtn(pnX+pnW*0.53, rbY, rbW, rbH, '✅ 离开商店', '#fadf9e', '#1a1f2b', '#6b4f3a', H*0.028);
-    ctx.textAlign='left';}
+    ctx.fillStyle='#3a4a5acc';
+    ctx.fillRect(refreshX,rbY,refreshW,rbH);
+    ctx.fillRect(leaveX,rbY,leaveW,rbH);
+    ctx.font=`${H*0.03}px sans-serif`; ctx.fillStyle='#b5c9b0'; ctx.textBaseline='middle';
+    ctx.fillText(`刷新(${rc}💰)`, refreshX+W*0.01, rbY+rbH/2);
+    ctx.fillText('离开商店', leaveX+W*0.01, rbY+rbH/2);
+    ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+  }
 
-  // PAUSED screen
+  // PAUSED screen — match HTML: dark overlay + text only, tap to resume
   if(G.gameState===D.STATE_PAUSED){
-    ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    // Title
-    ctx.fillStyle='#fadf9e';ctx.font=`bold ${H*0.1}px sans-serif`;
-    ctx.shadowColor='#aa8b6e';ctx.shadowBlur=20;ctx.fillText('⏸ 暂停', W/2, H*0.35);ctx.shadowBlur=0;
-    // Buttons
-    const {bW,bH,resumeY,backY} = pauseBtnLayout();
-    drawBtn((W-bW)/2, resumeY, bW, bH, '▶  继续游戏', '#fadf9e', '#1a3a1a', '#44aa44', H*0.038);
-    drawBtn((W-bW)/2, backY, bW, bH, '↺  返回主菜单', '#faeac6', '#1a1f2b', '#6b4f3a', H*0.035);
-    ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+    ctx.fillStyle='#000000aa'; ctx.fillRect(0,0,W,H);
+    ctx.font=`bold ${H*0.093}px sans-serif`; ctx.fillStyle='#dddddd';
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText('⏸ 暂停', W/2, H*0.467);
+    ctx.font=`${H*0.04}px sans-serif`; ctx.fillStyle='#b5a87d';
+    ctx.fillText('点击屏幕继续', W/2, H*0.6);
+    ctx.textAlign='left';
+  }
 
-  // GAME OVER screen
+  // GAME OVER screen — match HTML: dark overlay, two-column stats, tap to go back
   if(G.gameState===D.STATE_GAMEOVER){
-    ctx.fillStyle='rgba(0,0,0,0.88)';ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillStyle='#e05a5a';ctx.font=`bold ${H*0.08}px sans-serif`;
-    ctx.shadowColor='#ff0000';ctx.shadowBlur=20;ctx.fillText('💔 熄灭了', W/2, H*0.11);ctx.shadowBlur=0;
-    const mn=Math.floor(G.gameTime/60),sc=Math.floor(G.gameTime%60);
-    const timeStr=`${mn.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
-    const stats=[
+    ctx.fillStyle='#000000dd'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.font=`bold ${H*0.067}px sans-serif`; ctx.fillStyle='#e05a5a';
+    ctx.fillText('💔 熄灭了', W/2, H*0.133);
+    const col1x=W/2-W*0.18, col2x=W/2+W*0.02;
+    let ly=H*0.217, lh=H*0.05;
+    const mn2=Math.floor(G.gameTime/60),sc2=Math.floor(G.gameTime%60);
+    const timeStr=`${mn2.toString().padStart(2,'0')}:${sc2.toString().padStart(2,'0')}`;
+    const rows=[
       ['⏱️ 存活时间', timeStr, '#fadf9e'],
       ['⚡ 等级', ''+player.level, '#fadf9e'],
-      ['💀 击杀', ''+G.killCount, '#fadf9e'],
+      ['💀 击杀数', ''+G.killCount, '#fadf9e'],
       ['👑 Boss击杀', ''+G.bossKillCount, '#fadf9e'],
-      ['💰 金币获得', ''+G.runStats.goldEarned, '#ffd966'],
+      ['💰 金币获得', ''+G.runStats.goldEarned, '#fadf9e'],
       ['🔮 灵魂石', '+'+Math.round(G.gameTime/60*3+player.level+G.bossKillCount*5), '#b366ff'],
       ['⚔️ 总伤害', ''+Math.round(G.runStats.damageDealt), '#fadf9e'],
       ['🔥 最高连击', 'x'+G.runStats.highestCombo, '#ffaa44'],
     ];
-    // Stats panel
-    const panelX=W*0.12, panelW=W*0.76, panelY=H*0.14, panelH=stats.length*H*0.073+H*0.02;
-    ctx.fillStyle='rgba(26,31,43,0.8)';ctx.strokeStyle='#3a3025';ctx.lineWidth=1.5;
-    rr(panelX,panelY,panelW,panelH,10);ctx.fill();ctx.stroke();
-    ctx.font=`${H*0.034}px sans-serif`;
-    stats.forEach(([lbl,val,col],i)=>{
-      const ly=panelY+H*0.055+i*H*0.073;
-      ctx.fillStyle='#cbad8e';ctx.textAlign='left';ctx.fillText(lbl, panelX+W*0.04, ly);
-      ctx.fillStyle=col;ctx.textAlign='right';ctx.fillText(val, panelX+panelW-W*0.04, ly);
-    });
-    // Back button
-    const gbW=W*0.45, gbH=H*0.1;
-    drawBtn((W-gbW)/2, H*0.88, gbW, gbH, '↺  返回主菜单', '#fadf9e', '#1a1f2b', '#6b4f3a', H*0.036);
-    ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+    ctx.font=`${H*0.03}px sans-serif`;
+    ctx.textAlign='left';
+    for(const [lbl,val,col] of rows){
+      ctx.fillStyle='#cbad8e'; ctx.fillText(lbl, col1x, ly);
+      ctx.fillStyle=col; ctx.fillText(val, col2x, ly);
+      ly+=lh;
+    }
+    ctx.textAlign='center'; ctx.font=`${H*0.033}px sans-serif`; ctx.fillStyle='#b5a87d';
+    ctx.fillText('点击屏幕返回主菜单', W/2, ly+H*0.05);
+    ctx.textAlign='left';
+  }
 
   ctx.restore(); // end shake
 
@@ -429,7 +433,7 @@ function draw() {
 
 function drawHUD() {
   const p=G.player;
-  // HP bar with rounded corners
+  // HP bar
   const hbW=W*0.28,hbH=H*0.034,hbX=W*0.03,hbY=H*0.025;
   ctx.fillStyle='#222'; rr(hbX,hbY,hbW,hbH,4); ctx.fill();
   const hpPct=Math.max(0,p.hp/p.maxHp);
@@ -461,7 +465,8 @@ function drawHUD() {
     for(let e of G.enemies){const mx=mmX+mmW/2+(e.x-p.x)*mmS,my=mmY+mmH/2+(e.y-p.y)*mmS;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle=D.ENEMY_COLORS[e.type]||'#ff4444';ctx.fillRect(mx-1,my-1,2,2);}}
     for(let e of G.elites){const mx=mmX+mmW/2+(e.x-p.x)*mmS,my=mmY+mmH/2+(e.y-p.y)*mmS;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#ff9933';ctx.fillRect(mx-2,my-2,4,4);}}
     for(let bs of G.bosses){const bt=D.BOSS_TYPES[bs.bossType];if(!bt)continue;const mx=mmX+mmW/2+(bs.x-p.x)*mmS,my=mmY+mmH/2+(bs.y-p.y)*mmS;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle=bt.color;ctx.beginPath();ctx.arc(mx,my,3,0,Math.PI*2);ctx.fill();}}
-    ctx.fillStyle='#fff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);}
+    ctx.fillStyle='#fff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);
+  }
   // Combo
   if(p.comboCount>=3){const cc=p.comboCount>=10?'#ff4444':p.comboCount>=5?'#ffaa44':'#ffdd88';ctx.fillStyle=cc;ctx.font=`bold ${H*0.035}px sans-serif`;ctx.textAlign='center';ctx.fillText(`🔥 连击 x${p.comboCount}`,W/2,H*0.14);ctx.textAlign='left';}
   // Horde warning
@@ -476,12 +481,14 @@ function drawHUD() {
     const pw=W*0.4,ph=H*0.1,px=W-pw-8,py=H*0.1;
     ctx.fillStyle='#1a1f2b';ctx.strokeStyle='#ffd966';ctx.lineWidth=2;rr(px,py,pw,ph,10);ctx.fill();ctx.stroke();
     ctx.fillStyle='#fadf9e';ctx.font=`bold ${H*0.024}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(G.achievePopupText, px+pw/2, py+ph/2);ctx.textBaseline='alphabetic';ctx.globalAlpha=1;ctx.textAlign='left';}
-  // Pause button (top right)
-  ctx.fillStyle='rgba(30,37,51,0.85)';rr(W-70,4,62,44,8);ctx.fill();
-  ctx.strokeStyle='rgba(170,139,110,0.6)';ctx.lineWidth=1.5;rr(W-70,4,62,44,8);ctx.stroke();
-  ctx.fillStyle='rgba(255,255,255,0.85)';ctx.font='22px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('⏸', W-39, 26);ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    ctx.fillText(G.achievePopupText, px+pw/2, py+ph/2);ctx.textBaseline='alphabetic';ctx.globalAlpha=1;ctx.textAlign='left';
+  }
+  // Pause button — match HTML touch style: white semi-transparent box
+  ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.fillRect(W-W*0.09,5,W*0.08,50);
+  ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='28px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('⏸', W-W*0.05, 30);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 
 function drawTouchControls() {
@@ -503,7 +510,8 @@ function drawTouchControls() {
     else{ctx.fillStyle='rgba(255,200,100,0.45)';ctx.fill();}
     ctx.strokeStyle='rgba(255,255,255,0.55)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sbX,sbY,sbR,0,Math.PI*2);ctx.stroke();
     ctx.fillStyle='#fff';ctx.font=`bold ${H*0.021}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(rd.skillName, sbX, sbY);ctx.textBaseline='alphabetic';}
+    ctx.fillText(rd.skillName, sbX, sbY);ctx.textBaseline='alphabetic';
+  }
   ctx.textAlign='left';
   // Joystick hints
   if(!G.leftJoy.active){ctx.fillStyle='rgba(255,255,255,0.13)';ctx.font=`${H*0.028}px sans-serif`;ctx.fillText('移动',28,H-28);}
@@ -523,30 +531,26 @@ function drawTouchControls() {
     ctx.fillStyle='#aaa';ctx.font=`${H*0.027}px sans-serif`;ctx.fillText('自动射击 · 右摇杆控制方向',W/2,H*0.75);
     const blink=0.5+0.5*Math.sin(Date.now()/300);
     ctx.fillStyle=`rgba(255,223,158,${blink})`;ctx.font=`bold ${H*0.034}px sans-serif`;ctx.fillText('点击屏幕开始',W/2,H*0.88);
-    ctx.textAlign='left';}}
+    ctx.textAlign='left';
+  }
+}
 
 // ===== TOUCH HANDLERS =====
 function handleTouchStart(e) {
   for(const t of e.changedTouches){
     const x=t.clientX, y=t.clientY;
     if(G.gameState===D.STATE_MENU){handleMenuTouch(x,y);continue;}
-    if(G.gameState===D.STATE_GAMEOVER){
-      // Check back button
-      const gbW=W*0.45,gbH=H*0.1,gbX=(W-gbW)/2,gbY=H*0.88;
-      if(x>=gbX&&x<=gbX+gbW&&y>=gbY&&y<=gbY+gbH){backToMenu();continue;}
-      backToMenu();continue;}
-    if(G.gameState===D.STATE_PAUSED){
-      const {bW,bH,resumeY,backY}=pauseBtnLayout(), bX=(W-bW)/2;
-      if(x>=bX&&x<=bX+bW&&y>=resumeY&&y<=resumeY+bH){G.gameState=D.STATE_PLAYING;continue;}
-      if(x>=bX&&x<=bX+bW&&y>=backY&&y<=backY+bH){backToMenu();continue;}
-      continue;}
+    // GAMEOVER: tap anywhere → back to menu
+    if(G.gameState===D.STATE_GAMEOVER){backToMenu();continue;}
+    // PAUSED: tap anywhere → resume (matching HTML behavior)
+    if(G.gameState===D.STATE_PAUSED){G.gameState=D.STATE_PLAYING;continue;}
     if(G.showTouchTutorial){G.showTouchTutorial=false;continue;}
     if(G.gameState===D.STATE_UPGRADE&&G.upgradeOptions.length===3){handleUpgradeTouch(x,y);continue;}
     if(G.gameState===D.STATE_SKILL_UP&&G.skillUpOptions.length===3){handleSkillUpTouch(x,y);continue;}
     if(G.gameState===D.STATE_SHOP){handleShopTouch(x,y);continue;}
     if(G.gameState===D.STATE_PLAYING){
-      // Pause button
-      if(x>W-70&&x<W-8&&y>4&&y<48){G.gameState=D.STATE_PAUSED;continue;}
+      // Pause button (top right white box)
+      if(x>W-W*0.09&&x<W-W*0.01&&y>5&&y<55){G.gameState=D.STATE_PAUSED;continue;}
       // Dash
       if(Math.hypot(x-W/2,y-(H-52))<38){L.triggerDash();continue;}
       // Skill
@@ -569,32 +573,32 @@ function handleTouchEnd(e) {
 
 function handleMenuTouch(x,y) {
   const {roles,cardW,cardH,cardsX,cardsY,tabY,tabW,tabH,tabs,tabsX,contentY,btnW,btnH,btnX,btnY}=menuLayout();
-  // Role cards
   for(let i=0;i<roles.length;i++){const[key,r]=roles[i],rx=cardsX+i*(cardW+6);if(x>=rx&&x<=rx+cardW&&y>=cardsY&&y<=cardsY+cardH){if(!r.locked)G.selectedRole=key;return;}}
-  // Tabs
   for(let i=0;i<tabs.length;i++){const tx=tabsX+i*(tabW+8);if(x>=tx&&x<=tx+tabW&&y>=tabY&&y<=tabY+tabH){menuTab=tabs[i];return;}}
-  // Upgrade buttons in upgrade tab
   if(menuTab==='upgrades'){const {upgW,upgH,startX,uy}=upgradeLayout(contentY);for(let i=0;i<D.PERM_UPGRADES.length;i++){const ux=startX+i*(upgW+6);if(x>=ux&&x<=ux+upgW&&y>=uy&&y<=uy+upgH){L.buyPerm(i);return;}}}
-  // Start button
-  if(x>=btnX&&x<=btnX+btnW&&y>=btnY&&y<=btnY+btnH)startGame();}
+  if(x>=btnX&&x<=btnX+btnW&&y>=btnY&&y<=btnY+btnH)startGame();
+}
 
 function handleUpgradeTouch(x,y) {
   if(G.stateInputCooldown>0)return;
-  const {pnW,pnH,pnX,pnY}=overlayLayout();
-  for(let i=0;i<3;i++){const by=pnY+H*0.17+i*H*0.19,bh=H*0.15;if(x>=pnX+pnW*0.08&&x<=pnX+pnW*0.92&&y>=by&&y<=by+bh){L.applyUpgrade(i);return;}}}
+  const {pnX,pnY,pnW,pnH}=overlayLayout();
+  for(let i=0;i<3;i++){const by=pnY+H*0.217+i*H*0.1,bh=H*0.08;if(x>=pnX&&x<=pnX+pnW&&y>=by-bh/2&&y<=by+bh/2){L.applyUpgrade(i);return;}}
+}
 
 function handleSkillUpTouch(x,y) {
   if(G.stateInputCooldown>0)return;
-  const {pnW,pnH,pnX,pnY}=overlayLayout();
-  for(let i=0;i<3;i++){const by=pnY+H*0.18+i*H*0.19,bh=H*0.15;if(x>=pnX+pnW*0.08&&x<=pnX+pnW*0.92&&y>=by&&y<=by+bh){L.applySkillUpgrade(i);return;}}}
+  const {pnX,pnY,pnW,pnH}=overlayLayout();
+  for(let i=0;i<3;i++){const by=pnY+H*0.217+i*H*0.1,bh=H*0.08;if(x>=pnX&&x<=pnX+pnW&&y>=by-bh/2&&y<=by+bh/2){L.applySkillUpgrade(i);return;}}
+}
 
 function handleShopTouch(x,y) {
   if(G.stateInputCooldown>0)return;
-  const {pnW,pnH,pnX,pnY}=overlayLayout();
-  for(let i=0;i<3;i++){const by=pnY+H*0.2+i*H*0.16,bh=H*0.13;if(x>=pnX+pnW*0.08&&x<=pnX+pnW*0.92&&y>=by&&y<=by+bh){L.buyShopItem(i);return;}}
-  const rbY=pnY+pnH-H*0.14,rbH=H*0.1;
-  if(x>=pnX+pnW*0.05&&x<=pnX+pnW*0.47&&y>=rbY&&y<=rbY+rbH){L.refreshShop();return;}
-  if(x>=pnX+pnW*0.53&&x<=pnX+pnW*0.95&&y>=rbY&&y<=rbY+rbH){G.gameState=D.STATE_PLAYING;}}
+  const {pnX,pnY,pnW,pnH}=overlayLayout();
+  for(let i=0;i<3;i++){const by=pnY+H*0.217+i*H*0.1,bh=H*0.08;if(x>=pnX&&x<=pnX+pnW&&y>=by-bh/2&&y<=by+bh/2){L.buyShopItem(i);return;}}
+  const {refreshX,refreshW,leaveX,leaveW,rbY,rbH}=shopBtnLayout(pnX,pnY,pnW,pnH);
+  if(x>=refreshX&&x<=refreshX+refreshW&&y>=rbY&&y<=rbY+rbH){L.refreshShop();return;}
+  if(x>=leaveX&&x<=leaveX+leaveW&&y>=rbY&&y<=rbY+rbH){G.gameState=D.STATE_PLAYING;}
+}
 
 function startGame() {L.checkUnlocks();L.resetGame(W,H);}
 function backToMenu() {L.checkUnlocks();L.initGameState();S.loadAll();}
