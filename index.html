@@ -217,8 +217,8 @@
         let otherPlayers={}; // {id: {nick,role,x,y,hp,maxHp,alive,ghostX,ghostY,level,color}}
         let myCanResurrect=true, resCooldown=0;
         const MP_COLORS=['#f0f0ff','#ff6666','#66ff66','#ffcc44'];
-        const MP_SB_URL='https://ljlsruiydrsxetamtptm.supabase.co';
-        const MP_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNydWl5ZHJzeGV0YW10cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMjkzMjgsImV4cCI6MjA4ODcwNTMyOH0.3jofw4NPGiKgoVq6WZNQsU9o8Xv1n_nd07ZKYX-O3dU';
+        const MP_SB_URL='https://mvzbnhabisoswihbqifh.supabase.co';
+        const MP_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12emJuaGFiaXNvc3dpaGJxaWZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1OTc0MDgsImV4cCI6MjA5MDE3MzQwOH0.4ze5U_R-w8ZnvwSO-Uum6ej8k9CY6Iw5avxs8L3sq3E';
         let sbClient=null;
         let lastMPBroadcast=0;
         const MP_SYNC_RATE=100; // ms between state broadcasts
@@ -477,8 +477,8 @@
 
         // Live session-based leaderboard via Supabase
         const sessionId=Date.now()+'_'+Math.random().toString(36).slice(2,8);
-        const SB_URL='https://ljlsruiydrsxetamtptm.supabase.co/rest/v1';
-        const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNydWl5ZHJzeGV0YW10cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMjkzMjgsImV4cCI6MjA4ODcwNTMyOH0.3jofw4NPGiKgoVq6WZNQsU9o8Xv1n_nd07ZKYX-O3dU';
+        const SB_URL='https://mvzbnhabisoswihbqifh.supabase.co/rest/v1';
+        const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12emJuaGFiaXNvc3dpaGJxaWZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1OTc0MDgsImV4cCI6MjA5MDE3MzQwOH0.4ze5U_R-w8ZnvwSO-Uum6ej8k9CY6Iw5avxs8L3sq3E';
         let lastLBSync=0,cachedLeaderboard=[];
         function formatDuration(s){let m=Math.floor(s/60),sec=Math.floor(s%60);return `${m}:${sec.toString().padStart(2,'0')}`;}
         function syncLeaderboard(){
