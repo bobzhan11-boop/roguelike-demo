@@ -379,22 +379,45 @@
             for(let id in otherPlayers){if(now-otherPlayers[id]._lastSeen>5000)delete otherPlayers[id];}
         }
 
-        function tryResurrect(){
-            if(!isMP||!myCanResurrect||resCooldown>0||gameState===STATE_GAMEOVER)return;
+        // Resurrection channeling state
+        let resChanneling=false, resChannelTarget=null, resChannelProgress=0;
+        const RES_CHANNEL_TIME=3.5; // seconds to stand in circle
+        const RES_CIRCLE_RADIUS=70; // circle size around ghost
+        const RES_DODGE_BONUS=0.6; // extra dodge while channeling
+
+        function updateResurrection(dt){
+            if(!isMP||!myCanResurrect||resCooldown>0||gameState===STATE_GAMEOVER||gameState!==STATE_PLAYING){
+                resChanneling=false;resChannelTarget=null;resChannelProgress=0;return;
+            }
+            // Find nearest dead teammate in range
+            let foundTarget=null;
             for(let id in otherPlayers){
                 let op=otherPlayers[id];
                 if(!op.alive){
                     let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
-                    if(dist<80){
-                        myCanResurrect=false;resCooldown=30;
-                        mpChannel.send({type:'broadcast',event:'resurrect',payload:{targetId:id,byId:myMPId,byNick:playerNickname}});
-                        addFloatingText('💫 复活了 '+op.nick+'!',player.x,player.y-50,'#44ff44');
-                        return;
-                    }
+                    if(dist<RES_CIRCLE_RADIUS){foundTarget=id;break;}
                 }
             }
-            addFloatingText('附近没有可复活的队友',player.x,player.y-40,'#ff5555');
+            if(foundTarget){
+                if(resChannelTarget!==foundTarget){resChannelTarget=foundTarget;resChannelProgress=0;}
+                resChanneling=true;
+                resChannelProgress+=dt;
+                // Channeling complete
+                if(resChannelProgress>=RES_CHANNEL_TIME){
+                    let op=otherPlayers[foundTarget];
+                    myCanResurrect=false;resCooldown=30;
+                    resChanneling=false;resChannelTarget=null;resChannelProgress=0;
+                    mpChannel.send({type:'broadcast',event:'resurrect',payload:{targetId:foundTarget,byId:myMPId,byNick:playerNickname}});
+                    addFloatingText('💫 复活了 '+(op?op.nick:'队友')+'!',player.x,player.y-50,'#44ff44');
+                    screenShakeTimer=0.3;screenShakeIntensity=6;
+                }
+            }else{
+                // Left the circle, reset progress
+                resChanneling=false;resChannelTarget=null;resChannelProgress=0;
+            }
         }
+
+        function getResChannelDodgeBonus(){return resChanneling?RES_DODGE_BONUS:0;}
 
         function handleResurrection(data){
             if(data.targetId===myMPId&&gameState===STATE_GAMEOVER){
@@ -432,23 +455,52 @@
                     ctx.fillRect(bx,by,bw*(op.hp/op.maxHp),bh);
                     ctx.textAlign='left';
                 }else{
-                    // Dead player ghost
+                    // Dead player ghost with resurrection circle
                     let{x:gx,y:gy}=w2s(op.ghostX,op.ghostY);
                     let pulse=0.3+0.3*Math.sin(Date.now()/300);
+                    let isChannelingThis=resChanneling&&resChannelTarget===id;
+                    let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
+                    let inRange=dist<RES_CIRCLE_RADIUS&&myCanResurrect&&resCooldown<=0&&gameState!==STATE_GAMEOVER;
+
+                    // Resurrection circle (always visible)
+                    ctx.beginPath();ctx.arc(gx,gy,RES_CIRCLE_RADIUS,0,Math.PI*2);
+                    ctx.fillStyle=isChannelingThis?'rgba(68,255,68,0.08)':'rgba(136,136,255,0.05)';ctx.fill();
+                    ctx.strokeStyle=isChannelingThis?'rgba(68,255,68,0.5)':'rgba(136,136,255,0.25)';
+                    ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);
+
+                    // Ghost body
                     ctx.shadowColor='#8888ff';ctx.globalAlpha=pulse;
                     ctx.beginPath();ctx.arc(gx,gy,PLAYER_RADIUS+4,0,Math.PI*2);
                     ctx.fillStyle='rgba(136,136,255,0.3)';ctx.fill();
                     ctx.strokeStyle='rgba(136,136,255,0.6)';ctx.lineWidth=2;ctx.stroke();
                     ctx.globalAlpha=1;ctx.shadowBlur=0;
                     ctx.fillStyle='#8888ff';ctx.font='16px monospace';ctx.textAlign='center';
-                    ctx.fillText('👻',gx,gy+5);
+                    ctx.fillText('\u{1F47B}',gx,gy+5);
                     ctx.font='11px monospace';ctx.fillStyle='#aaaaff';
-                    ctx.fillText(op.nick||'Player',gx,gy-22);
-                    // Resurrect hint if close enough
-                    let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
-                    if(dist<100&&myCanResurrect&&resCooldown<=0&&gameState!==STATE_GAMEOVER){
-                        ctx.fillStyle='#44ff44';ctx.font='bold 13px monospace';
-                        ctx.fillText('按 R 复活',gx,gy+28);
+                    ctx.fillText(op.nick||'Player',gx,gy-28);
+
+                    // Channeling progress bar
+                    if(isChannelingThis){
+                        let pct=resChannelProgress/RES_CHANNEL_TIME;
+                        let bw=50,bh=6,bx=gx-bw/2,by=gy+22;
+                        ctx.fillStyle='#333';ctx.fillRect(bx,by,bw,bh);
+                        ctx.fillStyle='#44ff44';ctx.fillRect(bx,by,bw*pct,bh);
+                        ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(bx,by,bw,bh);
+                        ctx.fillStyle='#44ff44';ctx.font='bold 11px monospace';
+                        ctx.fillText('复活中... '+Math.ceil(RES_CHANNEL_TIME-resChannelProgress)+'s',gx,by+18);
+                        // Spinning particles around circle
+                        let spin=Date.now()/400;
+                        for(let p=0;p<4;p++){
+                            let a=spin+p*Math.PI/2;
+                            let px=gx+Math.cos(a)*RES_CIRCLE_RADIUS*0.8,py=gy+Math.sin(a)*RES_CIRCLE_RADIUS*0.8;
+                            ctx.fillStyle='rgba(68,255,68,0.6)';ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fill();
+                        }
+                    }else if(inRange){
+                        ctx.fillStyle='#88ffaa';ctx.font='bold 11px monospace';
+                        ctx.fillText('\u2b50 站在圈内复活',gx,gy+28);
+                    }else if(myCanResurrect&&resCooldown<=0){
+                        ctx.fillStyle='#888';ctx.font='10px monospace';
+                        ctx.fillText('走近复活',gx,gy+28);
                     }
                     ctx.textAlign='left';
                 }
@@ -755,8 +807,7 @@
                 if(pos.x>W/2-40&&pos.x<W/2+40&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){triggerDash();return;}
                 // Skill button (right of dash)
                 if(pos.x>W/2+45&&pos.x<W/2+105&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){activateSkill();return;}
-                // Resurrect button (left of dash) - MP only
-                if(isMP&&pos.x>W/2-105&&pos.x<W/2-45&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){tryResurrect();return;}
+                // Resurrection is automatic (stand in circle) - no button needed
                 if(pos.x<W/2&&!leftJoy.active){leftJoy.active=true;leftJoy.id=t.identifier;leftJoy.bx=pos.x;leftJoy.by=pos.y;leftJoy.kx=pos.x;leftJoy.ky=pos.y;}
                 else if(pos.x>=W/2&&!rightJoy.active){rightJoy.active=true;rightJoy.id=t.identifier;rightJoy.bx=pos.x;rightJoy.by=pos.y;rightJoy.kx=pos.x;rightJoy.ky=pos.y;}
             }
@@ -861,7 +912,7 @@
         // Helpers
         function clamp(v,mn,mx){return Math.min(mx,Math.max(mn,v));}
         function diminishingReturn(lv,f){return 1-1/(1+f*lv);}
-        function getFinalDodge(){return Math.min(MAX_DODGE_CHANCE,diminishingReturn(player.dodge,DODGE_DIMINISH_FACTOR));}
+        function getFinalDodge(){return Math.min(0.85,diminishingReturn(player.dodge,DODGE_DIMINISH_FACTOR)+(typeof getResChannelDodgeBonus==='function'?getResChannelDodgeBonus():0));}
         function getFinalSpeed(){let sm=ROLES[selectedRole]?ROLES[selectedRole].spdMult:1;return BASE_SPEED*sm*(1+diminishingReturn(player.speedBonus,SPEED_DIMINISH_FACTOR));}
 
         function findNearestEnemy(){
@@ -1042,7 +1093,7 @@
             // Apply mutators
             if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
-            myCanResurrect=true;resCooldown=0;
+            myCanResurrect=true;resCooldown=0;resChanneling=false;resChannelTarget=null;resChannelProgress=0;
             let resHint=document.getElementById('resHint');if(resHint)resHint.style.display=isMP?'':'none';
             updateUI();
         }
@@ -1950,7 +2001,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
             for(let[e,a]of dmgAccum){a.timer-=dt;if(a.timer<=0){let col=a.crits>0?'#ff4444':'#ffffff';let txt=Math.round(a.total).toString();if(a.crits>0)txt='💥'+txt;addFloatingText(txt,a.x,a.y-20,col);dmgAccum.delete(e);}}
             checkLevelUp();updateUI();if(Math.floor(gameTime*2)%6===0)checkAchievements();
             // Multiplayer sync
-            if(isMP){broadcastMyState();if(resCooldown>0)resCooldown-=dt;cleanupDisconnected();}
+            if(isMP){broadcastMyState();if(resCooldown>0)resCooldown-=dt;cleanupDisconnected();updateResurrection(dt);}
         }
 
         // ---------- DRAW ----------
@@ -2246,8 +2297,11 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                     ctx.fillStyle=op.alive?(op.color||'#fff'):'#666';
                     ctx.fillText((op.alive?'\u2764\uFE0F':'\u{1F480}')+' '+op.nick+' Lv'+op.level+' '+(op.alive?Math.floor(op.hp)+'/'+op.maxHp:'DEAD'),14,mpY);mpY+=16;}
                 // Resurrect status
-                if(myCanResurrect){ctx.fillStyle=resCooldown>0?'#888':'#44ff44';ctx.fillText(resCooldown>0?'R: CD '+Math.ceil(resCooldown)+'s':'R: Ready',14,mpY);}
-                else{ctx.fillStyle='#666';ctx.fillText('R: Used',14,mpY);}
+                if(myCanResurrect){
+                    if(resChanneling){ctx.fillStyle='#44ff44';ctx.fillText('\u{1F4AB} 复活中 '+Math.ceil(RES_CHANNEL_TIME-resChannelProgress)+'s (闪避+'+Math.round(RES_DODGE_BONUS*100)+'%)',14,mpY);}
+                    else if(resCooldown>0){ctx.fillStyle='#888';ctx.fillText('\u{1F4AB} 冷却 '+Math.ceil(resCooldown)+'s',14,mpY);}
+                    else{ctx.fillStyle='#44ff44';ctx.fillText('\u{1F4AB} 复活: 走近队友尸体',14,mpY);}
+                }else{ctx.fillStyle='#666';ctx.fillText('\u{1F4AB} 复活: 已使用',14,mpY);}
             }
 
             // Minimap (top-right)
@@ -2296,14 +2350,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                     ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sbX,sbY,sbR,0,Math.PI*2);ctx.stroke();
                     ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText(skRole.skillName,sbX,sbY+5);ctx.textAlign='left';
                 }
-                // Resurrect button (left of dash) - MP only
-                if(isMP){
-                    let rbX=W/2-75,rbY=H-50,rbR=28;ctx.beginPath();ctx.arc(rbX,rbY,rbR,0,Math.PI*2);
-                    if(!myCanResurrect||resCooldown>0){ctx.fillStyle='rgba(100,100,100,0.35)';ctx.fill();}
-                    else{ctx.fillStyle='rgba(100,255,100,0.4)';ctx.fill();}
-                    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(rbX,rbY,rbR,0,Math.PI*2);ctx.stroke();
-                    ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText('复活',rbX,rbY+5);ctx.textAlign='left';
-                }
+                // Resurrection is automatic - no button needed
                 // Joystick hints
                 if(!leftJoy.active){ctx.fillStyle='rgba(255,255,255,0.15)';ctx.font='16px monospace';ctx.fillText('移动',40,H-30);}
                 if(!rightJoy.active){ctx.fillStyle='rgba(255,255,255,0.15)';ctx.font='16px monospace';ctx.textAlign='right';ctx.fillText('瞄准',W-40,H-30);ctx.textAlign='left';}
@@ -2356,7 +2403,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;e.preventDefault();}
                 else if(k===' '&&gameState===STATE_PLAYING){triggerDash();e.preventDefault();}
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
-                else if(k==='r'&&isMP&&gameState===STATE_PLAYING){tryResurrect();e.preventDefault();}
+                // Resurrection is now automatic (stand in circle) - no R key needed
                 else if(gameState===STATE_RELIC){if(k==='1')applyRelic(0);if(k==='2')applyRelic(1);if(k==='3')applyRelic(2);e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_UPGRADE){if(k==='1')applyUpgrade(0);if(k==='2')applyUpgrade(1);if(k==='3')applyUpgrade(2);e.preventDefault();}
