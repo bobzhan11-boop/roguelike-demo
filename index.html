@@ -240,6 +240,9 @@
 
         function createRoom(){
             if(!initSBClient())return;
+            if(mpChannel){try{mpChannel.send({type:'broadcast',event:'leave_room',payload:{id:myMPId}});}catch(e){}}
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
+            lobbyPlayers={};
             roomCode=genRoomCode();myMPId=Date.now()+'_'+Math.random().toString(36).slice(2,6);isRoomHost=true;
             joinChannel();
             document.getElementById('roomCodeDisplay').textContent=roomCode;
@@ -252,6 +255,10 @@
             if(!initSBClient())return;
             let code=document.getElementById('joinCodeInput').value.trim().toUpperCase();
             if(code.length<3||code.length>6){alert('请输入房间号 (3-6位)');return;}
+            // Clean up old connection first
+            if(mpChannel){try{mpChannel.send({type:'broadcast',event:'leave_room',payload:{id:myMPId}});}catch(e){}}
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
+            lobbyPlayers={};
             roomCode=code;myMPId=Date.now()+'_'+Math.random().toString(36).slice(2,6);isRoomHost=false;
             joinChannel();
             document.getElementById('roomCodeDisplay').textContent=roomCode;
@@ -383,7 +390,7 @@
         // Resurrection channeling state
         let resChanneling=false, resChannelTarget=null, resChannelProgress=0;
         const RES_CHANNEL_TIME=3.5; // seconds to stand in circle
-        const RES_CIRCLE_RADIUS=70; // circle size around ghost
+        const RES_CIRCLE_RADIUS=100; // circle size around ghost
 
         function updateResurrection(dt){
             if(!isMP||resCooldown>0||gameState===STATE_GAMEOVER||gameState!==STATE_PLAYING){
@@ -414,7 +421,7 @@
             }else{
                 // Left the circle — progress slowly drains instead of resetting
                 resChanneling=false;resChannelTarget=null;
-                if(resChannelProgress>0)resChannelProgress=Math.max(0,resChannelProgress-dt*0.8);
+                if(resChannelProgress>0)resChannelProgress=Math.max(0,resChannelProgress-dt*0.3);
             }
         }
 
@@ -463,11 +470,25 @@
                     let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
                     let inRange=dist<RES_CIRCLE_RADIUS&&myCanResurrect&&resCooldown<=0&&gameState!==STATE_GAMEOVER;
 
-                    // Resurrection circle (always visible)
+                    let pct=resChannelProgress/RES_CHANNEL_TIME;
+
+                    // Resurrection zone — dim circle (always visible)
                     ctx.beginPath();ctx.arc(gx,gy,RES_CIRCLE_RADIUS,0,Math.PI*2);
-                    ctx.fillStyle=isChannelingThis?'rgba(68,255,68,0.08)':'rgba(136,136,255,0.05)';ctx.fill();
-                    ctx.strokeStyle=isChannelingThis?'rgba(68,255,68,0.5)':'rgba(136,136,255,0.25)';
-                    ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);
+                    ctx.fillStyle=isChannelingThis?'rgba(68,255,68,0.06)':'rgba(136,136,255,0.04)';ctx.fill();
+                    // Dashed background circle
+                    ctx.strokeStyle='rgba(136,136,255,0.2)';ctx.lineWidth=2;ctx.setLineDash([6,8]);
+                    ctx.beginPath();ctx.arc(gx,gy,RES_CIRCLE_RADIUS,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+
+                    // Progress arc — draws the circle like filling it in
+                    if(pct>0){
+                        let startAngle=-Math.PI/2;
+                        let endAngle=startAngle+pct*Math.PI*2;
+                        ctx.beginPath();ctx.arc(gx,gy,RES_CIRCLE_RADIUS,startAngle,endAngle);
+                        ctx.strokeStyle='rgba(68,255,68,0.9)';ctx.lineWidth=4;ctx.shadowColor='#44ff44';ctx.shadowBlur=12;ctx.stroke();ctx.shadowBlur=0;
+                        // Inner glow fills as progress goes up
+                        ctx.beginPath();ctx.moveTo(gx,gy);ctx.arc(gx,gy,RES_CIRCLE_RADIUS,startAngle,endAngle);ctx.closePath();
+                        ctx.fillStyle=`rgba(68,255,68,${0.03+pct*0.08})`;ctx.fill();
+                    }
 
                     // Ghost body
                     ctx.shadowColor='#8888ff';ctx.globalAlpha=pulse;
@@ -478,30 +499,27 @@
                     ctx.fillStyle='#8888ff';ctx.font='16px monospace';ctx.textAlign='center';
                     ctx.fillText('\u{1F47B}',gx,gy+5);
                     ctx.font='11px monospace';ctx.fillStyle='#aaaaff';
-                    ctx.fillText(op.nick||'Player',gx,gy-28);
+                    ctx.fillText(op.nick||'Player',gx,gy-PLAYER_RADIUS-18);
 
-                    // Channeling progress bar
+                    // Status text & particles
                     if(isChannelingThis){
-                        let pct=resChannelProgress/RES_CHANNEL_TIME;
-                        let bw=50,bh=6,bx=gx-bw/2,by=gy+22;
-                        ctx.fillStyle='#333';ctx.fillRect(bx,by,bw,bh);
-                        ctx.fillStyle='#44ff44';ctx.fillRect(bx,by,bw*pct,bh);
-                        ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(bx,by,bw,bh);
-                        ctx.fillStyle='#44ff44';ctx.font='bold 11px monospace';
-                        ctx.fillText('复活中... '+Math.ceil(RES_CHANNEL_TIME-resChannelProgress)+'s',gx,by+18);
-                        // Spinning particles around circle
-                        let spin=Date.now()/400;
-                        for(let p=0;p<4;p++){
-                            let a=spin+p*Math.PI/2;
-                            let px=gx+Math.cos(a)*RES_CIRCLE_RADIUS*0.8,py=gy+Math.sin(a)*RES_CIRCLE_RADIUS*0.8;
-                            ctx.fillStyle='rgba(68,255,68,0.6)';ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fill();
-                        }
+                        ctx.fillStyle='#44ff44';ctx.font='bold 12px monospace';
+                        ctx.fillText(Math.round(pct*100)+'%',gx,gy+PLAYER_RADIUS+20);
+                        // Spinning particles on the arc edge
+                        let headAngle=-Math.PI/2+pct*Math.PI*2;
+                        let hx=gx+Math.cos(headAngle)*RES_CIRCLE_RADIUS,hy=gy+Math.sin(headAngle)*RES_CIRCLE_RADIUS;
+                        ctx.fillStyle='#88ff88';ctx.shadowColor='#44ff44';ctx.shadowBlur=10;
+                        ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+                    }else if(pct>0){
+                        // Draining — show fading percentage
+                        ctx.fillStyle='#aaaaff';ctx.font='11px monospace';
+                        ctx.fillText(Math.round(pct*100)+'%',gx,gy+PLAYER_RADIUS+20);
                     }else if(inRange){
                         ctx.fillStyle='#88ffaa';ctx.font='bold 11px monospace';
-                        ctx.fillText('\u2b50 站在圈内复活',gx,gy+28);
-                    }else if(myCanResurrect&&resCooldown<=0){
+                        ctx.fillText('\u2b50 站在圈内复活',gx,gy+RES_CIRCLE_RADIUS+16);
+                    }else if(resCooldown<=0){
                         ctx.fillStyle='#888';ctx.font='10px monospace';
-                        ctx.fillText('走近复活',gx,gy+28);
+                        ctx.fillText('走近复活',gx,gy+RES_CIRCLE_RADIUS+16);
                     }
                     ctx.textAlign='left';
                 }
