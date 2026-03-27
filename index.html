@@ -260,64 +260,92 @@
             document.getElementById('roomPlayerList').innerHTML='<div style="color:#aaa">连接中...</div>';
         }
 
+        // Lobby player list managed via broadcast (no Presence needed)
+        let lobbyPlayers={};
+        let lobbyBroadcastInterval=null;
+
         function joinChannel(){
             if(mpChannel){try{mpChannel.unsubscribe();}catch(e){}mpChannel=null;}
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
             console.log('[MP] Joining channel room-'+roomCode);
-            mpChannel=sbClient.channel('room-'+roomCode,{config:{broadcast:{self:false},presence:{key:myMPId}}});
-            mpChannel.on('presence',{event:'sync'},()=>{console.log('[MP] Presence sync');updateRoomPlayerList();});
-            mpChannel.on('presence',{event:'join'},({key,newPresences})=>{console.log('[MP] Player joined:',key);updateRoomPlayerList();});
-            mpChannel.on('presence',{event:'leave'},({key})=>{console.log('[MP] Player left:',key);updateRoomPlayerList();});
-            mpChannel.on('broadcast',{event:'state'},({payload})=>{handleRemoteState(payload);});
+
+            mpChannel=sbClient.channel('room-'+roomCode,{config:{broadcast:{self:true}}});
+
+            mpChannel.on('broadcast',{event:'lobby'},({payload})=>{
+                if(payload&&payload.id){
+                    lobbyPlayers[payload.id]={nick:payload.nick,role:payload.role,ts:Date.now()};
+                    updateRoomPlayerList();
+                }
+            });
+            mpChannel.on('broadcast',{event:'state'},({payload})=>{if(payload&&payload.id!==myMPId)handleRemoteState(payload);});
             mpChannel.on('broadcast',{event:'resurrect'},({payload})=>{handleResurrection(payload);});
             mpChannel.on('broadcast',{event:'game_start'},({payload})=>{
                 if(!isRoomHost){
                     console.log('[MP] Game start received');
                     isMP=true;
-                    // Auto-detect: use touch mode on mobile
                     let isMobile='ontouchstart' in window||navigator.maxTouchPoints>0;
                     startGame(isMobile?'touch':'keyboard');
                 }
             });
-            mpChannel.subscribe(async(status)=>{
+            mpChannel.on('broadcast',{event:'leave_room'},({payload})=>{
+                if(payload&&payload.id){delete lobbyPlayers[payload.id];updateRoomPlayerList();}
+            });
+
+            mpChannel.subscribe((status)=>{
                 console.log('[MP] Subscribe status:',status);
                 if(status==='SUBSCRIBED'){
+                    console.log('[MP] Connected OK!');
+                    // Announce ourselves to the lobby
                     let nickEl=document.getElementById('nickInput');
                     let nick=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
-                    await mpChannel.track({id:myMPId,nick:nick,role:selectedRole,ready:true});
-                    console.log('[MP] Tracked presence as',nick);
+                    lobbyPlayers[myMPId]={nick:nick,role:selectedRole,ts:Date.now()};
+                    mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole}});
+                    // Keep announcing every 2s so others see us
+                    lobbyBroadcastInterval=setInterval(()=>{
+                        if(!mpChannel)return;
+                        mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole}});
+                        // Clean up stale players (not seen in 6s)
+                        let now=Date.now();
+                        for(let id in lobbyPlayers){if(now-lobbyPlayers[id].ts>6000)delete lobbyPlayers[id];}
+                        updateRoomPlayerList();
+                    },2000);
                     updateRoomPlayerList();
-                }else if(status==='CHANNEL_ERROR'){
-                    document.getElementById('roomPlayerList').innerHTML='<div style="color:#ff5555">连接失败! 请重试</div>';
+                }else if(status==='TIMED_OUT'||status==='CHANNEL_ERROR'||status==='CLOSED'){
+                    console.error('[MP] Connection failed:',status);
+                    document.getElementById('roomPlayerList').innerHTML='<div style="color:#ff5555">连接失败 ('+status+')! 请刷新页面重试</div>';
                 }
             });
         }
 
         function updateRoomPlayerList(){
-            if(!mpChannel)return;
-            let state=mpChannel.presenceState();
-            let players=[];
-            for(let key in state){let arr=state[key];for(let p of arr){players.push(p);}}
             let el=document.getElementById('roomPlayerList');
-            if(players.length===0){el.innerHTML='<div style="color:#aaa">等待玩家加入... (分享房间号给朋友)</div>';return;}
-            let html=players.map((p,i)=>{
+            let ids=Object.keys(lobbyPlayers);
+            if(ids.length===0){el.innerHTML='<div style="color:#aaa">等待玩家加入... (分享房间号给朋友)</div>';return;}
+            let html=ids.map((id,i)=>{
+                let p=lobbyPlayers[id];
                 let color=MP_COLORS[i%MP_COLORS.length];
-                let isMe=p.id===myMPId;
+                let isMe=id===myMPId;
                 return `<div style="color:${color};margin:4px 0">${isMe?'👤':'👥'} ${p.nick||'Player'}${isMe?' (你)':''} - ${ROLES[p.role]?ROLES[p.role].name:'白点'}</div>`;
             }).join('');
-            el.innerHTML=`<div style="color:#ffd966;margin-bottom:6px">${players.length}/4 玩家已连接 ✅</div>${html}`;
-            // Show start button for host only when 2+ players
-            if(isRoomHost){document.getElementById('startMPBtn').style.display=players.length>=2?'inline-block':'none';}
+            el.innerHTML=`<div style="color:#ffd966;margin-bottom:6px">${ids.length}/4 玩家已连接 ✅</div>${html}`;
+            if(isRoomHost){document.getElementById('startMPBtn').style.display=ids.length>=1?'inline-block':'none';}
         }
 
         function leaveRoom(){
-            if(mpChannel){try{mpChannel.untrack();mpChannel.unsubscribe();}catch(e){}mpChannel=null;}
-            isMP=false;isRoomHost=false;roomCode='';otherPlayers={};
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
+            if(mpChannel){
+                try{mpChannel.send({type:'broadcast',event:'leave_room',payload:{id:myMPId}});}catch(e){}
+                try{mpChannel.unsubscribe();}catch(e){}
+                mpChannel=null;
+            }
+            isMP=false;isRoomHost=false;roomCode='';otherPlayers={};lobbyPlayers={};
             document.getElementById('roomLobby').style.display='none';
         }
 
         function startMPGame(){
             if(!isRoomHost||!mpChannel)return;
             isMP=true;
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
             mpChannel.send({type:'broadcast',event:'game_start',payload:{roomCode:roomCode}});
             startGame(controlMode||'keyboard');
         }
