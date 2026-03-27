@@ -164,6 +164,34 @@
             {id:'noShop',name:'无商店',desc:'击杀Boss无商店',soulBonus:8},
             {id:'pacifist',name:'限时猎杀',desc:'每4分钟必须杀Boss',soulBonus:10},
         ];
+        const STATE_RELIC='relic';
+        const ALL_RELICS=[
+            {id:'boomerang',name:'Boomerang',icon:'\u{1FA83}',desc:'Bullets reverse direction at 60% life'},
+            {id:'chainLightning',name:'Chain Lightning',icon:'\u26A1',desc:'Kill damage chains 30% to nearest enemy'},
+            {id:'bloodPact',name:'Blood Pact',icon:'\u{1FA78}',desc:'-1 HP/15s, +40% damage'},
+            {id:'freezeOnCrit',name:'Freeze on Crit',icon:'\u2744\uFE0F',desc:'Crits freeze enemies 0.8s'},
+            {id:'goldRain',name:'Gold Rain',icon:'\u{1F327}\uFE0F',desc:'Enemies drop 2+level gold'},
+            {id:'vampiricAura',name:'Vampiric Aura',icon:'\u{1F9DB}',desc:'+1.5% lifesteal'},
+            {id:'missileLock',name:'Missile Lock',icon:'\u{1F3AF}',desc:'Bullets gently home toward enemies'},
+            {id:'secondWind',name:'Second Wind',icon:'\u{1F4A8}',desc:'Below 20% HP: invincible 3s + heal 25% (once)'},
+            {id:'thorns',name:'Thorns',icon:'\u{1F335}',desc:'Enemies take 5 dmg when hitting you'},
+            {id:'xpFeast',name:'XP Feast',icon:'\u{1F4DA}',desc:'+30% XP from all sources'},
+        ];
+        const ELITE_AFFIXES=[
+            {id:'vampiric',name:'Vampiric',icon:'\u{1F9DB}'},
+            {id:'splitting',name:'Splitting',icon:'\u{1F480}'},
+            {id:'shielded',name:'Shielded',icon:'\u{1F6E1}\uFE0F'},
+            {id:'haste',name:'Haste',icon:'\u26A1'},
+            {id:'thorny',name:'Thorny',icon:'\u{1F335}'},
+        ];
+        const WEAPON_EVOLUTIONS={
+            dot:{stat:'piercing',threshold:4,name:'Laser Beam',announce:'\u{1F4A0} Laser Beam!'},
+            sword:{stat:'speed',threshold:380,name:'Blade Storm',announce:'\u{1F300} Blade Storm!'},
+            arrow:{stat:'critChance',threshold:0.35,name:'Explosive Arrows',announce:'\u{1F4A5} Explosive Arrows!'},
+            dagger:{stat:'bulletCount',threshold:6,name:'Blade Vortex',announce:'\u{1F5E1}\uFE0F Blade Vortex!'},
+            orb:{stat:'piercing',threshold:3,name:'Arcane Barrage',announce:'\u{1F52E} Arcane Barrage!'},
+            soulBolt:{stat:'lifesteal',threshold:0.02,name:'Soul Reaper',announce:'\u{1F480} Soul Reaper!'},
+        };
         let voidMode=false;
         function loadSettings(){try{let s=localStorage.getItem('rl_settings');if(s)gameSettings={...gameSettings,...JSON.parse(s)};}catch(e){}}
         function saveSettings(){localStorage.setItem('rl_settings',JSON.stringify(gameSettings));}
@@ -441,7 +469,7 @@
         function handleJoyTouchStart(e){
             e.preventDefault();if(controlMode!=='touch')return;
             if(showTouchTutorial){showTouchTutorial=false;return;}
-            if(gameState===STATE_UPGRADE||gameState===STATE_SHOP||gameState===STATE_GAMEOVER||gameState===STATE_PAUSED||gameState===STATE_SKILL_UP){
+            if(gameState===STATE_UPGRADE||gameState===STATE_SHOP||gameState===STATE_GAMEOVER||gameState===STATE_PAUSED||gameState===STATE_SKILL_UP||gameState===STATE_RELIC){
                 const t=e.changedTouches[0];if(t){const p=canvasTouchCoords(t);handleScreenTap(p.x,p.y);}return;
             }
             for(let i=0;i<e.changedTouches.length;i++){
@@ -474,6 +502,7 @@
         }
         function handleScreenTap(tx,ty){
             const pX=200,pY=150,pW=600;
+            if(gameState===STATE_RELIC&&relicChoices.length>0){for(let i=0;i<relicChoices.length;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){applyRelic(i);return;}}}
             if(gameState===STATE_SKILL_UP&&skillUpOptions.length===3){for(let i=0;i<3;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){applySkillUpgrade(i);return;}}}
             if(gameState===STATE_UPGRADE&&upgradeOptions.length===3){for(let i=0;i<3;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){applyUpgrade(i);return;}}}
             if(gameState===STATE_SHOP){for(let i=0;i<3;i++){let oy=pY+100+i*60;if(tx>=pX&&tx<=pX+pW&&ty>=oy&&ty<=oy+55){buyShopItem(i);return;}}if(tx>=pX+60&&tx<=pX+200&&ty>=pY+280&&ty<=pY+320){refreshShop();return;}if(tx>=pX+350&&tx<=pX+500&&ty>=pY+280&&ty<=pY+320){gameState=STATE_PLAYING;return;}}
@@ -529,6 +558,16 @@
         let lastShotTime=0,lastSpawnTime=0,killCount=0,eliteKillCount=0,bossKillCount=0;
         let runStats={damageDealt:0,highestCombo:0,goldEarned:0,upgradesTaken:0,totalCrits:0,noDamageTimer:0};
         let upgradeOptions=[],nearbyChest=null,shopItems=[null,null,null],shopRefreshCount=0;
+        // Relic system
+        let relicChoices=[],relicDropPending=false;
+        // Weapon evolution
+        // Environmental events
+        let healingShrines=[],lavaPools=[],speedPortals=[],toxicFog={active:false,x:0,y:0,radius:2000};
+        let envShrineTimer=0,envLavaTimer=0,envPortalTimer=0,envToxicTriggered=false;
+        // Blade vortex daggers
+        let orbitingDaggers=[];
+        // Blade storm aura
+        let bladeStormTimer=0;
         let lastTimestamp=0,gameLoop=null;
         let spawnRate=0.9,difficultyTimer=0,lastChestSpawnTime=0;
         const CHEST_SPAWN_INTERVAL=30;
@@ -657,7 +696,9 @@
         function applySkillUpgrade(i){
             if(i<0||i>=skillUpOptions.length)return;
             skillUpOptions[i].apply();skillLevel++;
-            skillUpOptions=[];gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;stateInputCooldown=0.15;
+            skillUpOptions=[];
+            if(relicDropPending){triggerRelicSelection();stateInputCooldown=0.15;}
+            else{gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;stateInputCooldown=0.15;}
         }
 
         function damagePlayer(amount){
@@ -666,6 +707,10 @@
             amount=Math.max(1,amount-(player.armor||0));
             player.hp-=amount;player.invincibleTimer=INVINCIBLE_DURATION;player.damageFlash=0.45;
             screenShakeTimer=0.2;screenShakeIntensity=4+Math.min(amount,8);
+            // Second Wind relic: below 20% HP, heal 25% and become invincible 3s (once)
+            if(hasRelic('secondWind')&&!player.secondWindUsed&&player.hp>0&&player.hp<=player.maxHp*0.2){
+                player.secondWindUsed=true;player.hp+=Math.floor(player.maxHp*0.25);player.hp=Math.min(player.maxHp,player.hp);
+                player.invincibleTimer=3.0;addFloatingText('\u{1F4A8} Second Wind!',player.x,player.y-50,'#88ddff');screenShakeTimer=0.3;screenShakeIntensity=6;}
             if(player.hp<=0){
                 gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;
                 metaStats.totalKills+=killCount;metaStats.totalBossKills+=bossKillCount;
@@ -695,7 +740,8 @@
                 dodge:role.dodgeBase,invincibleTimer:0,radius:PLAYER_RADIUS,gold:0,damageFlash:0,
                 dashCooldown:0,isDashing:false,dashTimer:0,dashDirX:0,dashDirY:0,
                 slowTimer:0,skillTimer:0,skillActive:null,role:selectedRole,
-                lifesteal:0,magnetRange:selectedRole==='ranger'?40:0,thorns:0,comboCount:0,comboTimer:0,armor:permLevels.permArmor||0,regen:(permLevels.permRegen||0)*0.5};
+                lifesteal:0,magnetRange:selectedRole==='ranger'?40:0,thorns:0,comboCount:0,comboTimer:0,armor:permLevels.permArmor||0,regen:(permLevels.permRegen||0)*0.5,
+                relics:[],secondWindUsed:false,evolved:false,evolvedWeapon:null};
             // Apply permanent upgrades
             let prestMult=1+(metaStats.prestigeLevel||0)*0.05;
             player.maxHp=Math.floor(player.maxHp*prestMult);player.damage*=prestMult;player.speed*=prestMult;
@@ -712,6 +758,10 @@
             worldOffsetX=0;worldOffsetY=0;touchActive=false;leftJoy.active=false;rightJoy.active=false;
             touchAimAngle=0;screenShakeTimer=0;screenShakeIntensity=0;showTouchTutorial=controlMode==='touch';
             voidMode=false;
+            relicChoices=[];relicDropPending=false;
+            healingShrines=[];lavaPools=[];speedPortals=[];toxicFog={active:false,x:0,y:0,radius:2000};
+            envShrineTimer=0;envLavaTimer=0;envPortalTimer=0;envToxicTriggered=false;
+            orbitingDaggers=[];bladeStormTimer=0;
             // Apply mutators
             if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
@@ -784,7 +834,10 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                 let es=getEliteStatScale();
                 for(let i=0;i<n;i++){let r=18+Math.random()*8,hp=Math.floor((15+player.level*5+Math.floor(difficultyTimer))*es.healthMult),spd=(35+player.level*1.5)*es.speedMult;
                     let a=Math.random()*Math.PI*2,d=400+Math.random()*200;
-                    elites.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isElite:true,isBoss:false});}
+                    let afxs=rollEliteAffixes();
+                    let shieldHp=0;
+                    for(let af of afxs){if(af.id==='haste')spd*=1.8;if(af.id==='shielded')shieldHp=Math.floor(hp*0.3);}
+                    elites.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isElite:true,isBoss:false,affixes:afxs,affixShield:shieldHp});}
                 addFloatingText(`⚡ 精英出现 x${n}`,player.x,player.y-60,"#ffaa55");
             }
         }
@@ -923,13 +976,16 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                     bullets.push({x:player.x+bx*(player.radius+3),y:player.y+by*(player.radius+3),vx:bx*player.bulletSpeed*1.3,vy:by*player.bulletSpeed*1.3,
                         radius:player.bulletSize,damage:player.damage*dm,piercing:player.piercing,hitEnemies:new Set(),isCrit:crit,life:2.5,fromBoss:false,weaponType:'arrow'});}
             }else if(wep==='orb'){
-                // Slow piercing orbs
+                // Slow piercing orbs / Arcane Barrage evolution
+                let orbCount=player.evolved&&player.evolvedWeapon==='Arcane Barrage'?3:1;
                 for(let i=0;i<bc;i++){
                     let a=bc===1?ba:ba+(i/(bc-1)-0.5)*sp;
+                    for(let oi=0;oi<orbCount;oi++){
+                    let spdMult=orbCount>1?(0.35+oi*0.15):0.5;
                     let crit=Math.random()<player.critChance,dm=crit?player.critDamage:1.0;
                     bullets.push({x:player.x+Math.cos(a)*(player.radius+3),y:player.y+Math.sin(a)*(player.radius+3),
-                        vx:Math.cos(a)*player.bulletSpeed*0.5,vy:Math.sin(a)*player.bulletSpeed*0.5,
-                        radius:player.bulletSize+4,damage:player.damage*dm*1.8,piercing:player.piercing+2,hitEnemies:new Set(),isCrit:crit,life:4.0,fromBoss:false,weaponType:'orb'});}
+                        vx:Math.cos(a)*player.bulletSpeed*spdMult,vy:Math.sin(a)*player.bulletSpeed*spdMult,
+                        radius:player.bulletSize+4,damage:player.damage*dm*1.8,piercing:player.piercing+2,hitEnemies:new Set(),isCrit:crit,life:4.0,fromBoss:false,weaponType:'orb',arcaneGrow:orbCount>1});}}
             }else if(wep==='dagger'){
                 // Fast short-range burst
                 for(let i=0;i<bc+1;i++){
@@ -998,6 +1054,8 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             if(i<0||i>=upgradeOptions.length)return;const old=player.nextExp;upgradeOptions[i].apply(player);
             player.damage*=1.03; // +3% damage per level
             player.level++;player.exp-=old;player.nextExp=Math.floor(BASE_EXP_NEXT+player.level*EXP_INCREASE_PER_LEVEL);upgradeOptions=[];
+            // Check weapon evolution
+            checkWeaponEvolution();
             if(player.exp>=player.nextExp){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}else gameState=STATE_PLAYING;updateUI();
         }
         function checkLevelUp(){if(player.exp>=player.nextExp&&gameState===STATE_PLAYING){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}}
@@ -1020,12 +1078,151 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
         function refreshShop(){if(gameState!==STATE_SHOP)return;let c=10*Math.pow(2,shopRefreshCount);if(player.gold<c){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=c;shopRefreshCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];addFloatingText("商店已刷新",player.x,player.y-30,"#aaffaa");}
         function buyShopItem(i){if(i<0||i>=3)return;let it=shopItems[i];if(!it){addFloatingText("已售罄",player.x,player.y-40,"#aaaaaa");return;}if(player.gold<it.price){addFloatingText("金币不足",player.x,player.y-40,"#ff5555");return;}player.gold-=it.price;it.effect();addFloatingText("已购买 "+it.name,player.x,player.y-30,"#aaffaa");shopItems[i]=null;updateUI();}
 
+        // --- RELIC SYSTEM ---
+        function hasRelic(id){return player.relics.some(r=>r.id===id);}
+        function generateRelicChoices(){
+            let available=ALL_RELICS.filter(r=>!player.relics.some(pr=>pr.id===r.id));
+            return available.sort(()=>Math.random()-0.5).slice(0,3);
+        }
+        function applyRelic(index){
+            if(index<0||index>=relicChoices.length)return;
+            let r=relicChoices[index];player.relics.push(r);
+            if(r.id==='bloodPact'){player.damage*=1.4;}
+            if(r.id==='vampiricAura'){player.lifesteal=Math.min(0.12,player.lifesteal+0.015);}
+            addFloatingText(`${r.icon} ${r.name}!`,player.x,player.y-50,'#ffd966');
+            relicChoices=[];relicDropPending=false;
+            // After relic selection from boss, go to shop; from elite, resume playing
+            if(gameState===STATE_RELIC){gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;}
+            else{gameState=STATE_PLAYING;}
+        }
+        function tryRelicDrop(isElite,isBoss){
+            if(player.relics.length>=5)return;
+            let available=ALL_RELICS.filter(r=>!player.relics.some(pr=>pr.id===r.id));
+            if(available.length===0)return;
+            let chance=isBoss?1.0:0.25;
+            if(Math.random()<chance){relicDropPending=true;}
+        }
+        function triggerRelicSelection(){
+            relicChoices=generateRelicChoices();
+            if(relicChoices.length>0){gameState=STATE_RELIC;}else{relicDropPending=false;}
+        }
+        // --- ELITE AFFIXES ---
+        function rollEliteAffixes(){
+            let count=1+Math.floor(Math.random()*2); // 1-2 affixes
+            let pool=[...ELITE_AFFIXES];
+            let result=[];
+            for(let i=0;i<count&&pool.length>0;i++){
+                let idx=Math.floor(Math.random()*pool.length);
+                result.push(pool[idx]);pool.splice(idx,1);
+            }
+            return result;
+        }
+        // --- WEAPON EVOLUTION ---
+        function checkWeaponEvolution(){
+            if(player.evolved)return;
+            let wep=(ROLES[selectedRole]||ROLES.dot).weapon||'dot';
+            let evo=WEAPON_EVOLUTIONS[wep];if(!evo)return;
+            let val=0;
+            if(evo.stat==='piercing')val=player.piercing;
+            else if(evo.stat==='speed')val=getFinalSpeed();
+            else if(evo.stat==='critChance')val=player.critChance;
+            else if(evo.stat==='bulletCount')val=player.bulletCount;
+            else if(evo.stat==='lifesteal')val=player.lifesteal;
+            if(val>=evo.threshold){
+                player.evolved=true;player.evolvedWeapon=evo.name;
+                addFloatingText(evo.announce,player.x,player.y-70,'#ffd966');
+                screenShakeTimer=0.5;screenShakeIntensity=10;
+                // Apply evolution bonuses
+                if(evo.name==='Laser Beam'){player.piercing+=3;player.fireInterval=Math.max(0.04,player.fireInterval*0.4);player.bulletSize=Math.max(2,player.bulletSize-2);}
+                if(evo.name==='Blade Storm'){/* passive aura handled in updateGame */}
+                if(evo.name==='Explosive Arrows'){/* explosion on hit handled in bullet code */}
+                if(evo.name==='Blade Vortex'){for(let i=0;i<4;i++)orbitingDaggers.push({angle:i*Math.PI/2,dist:50,dmg:player.damage*0.8});}
+                if(evo.name==='Arcane Barrage'){player.bulletCount=Math.max(player.bulletCount,3);}
+                if(evo.name==='Soul Reaper'){/* auto ghost spawn on kill handled in death code */}
+            }
+        }
+        // --- ENVIRONMENTAL EVENTS ---
+        function spawnEnvironmentalEvents(dt,now){
+            envShrineTimer+=dt;envLavaTimer+=dt;envPortalTimer+=dt;
+            // Healing shrines every 90s
+            if(envShrineTimer>=90){envShrineTimer=0;let a=Math.random()*Math.PI*2,d=200+Math.random()*400;
+                healingShrines.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:25,active:true});}
+            // Lava pools after 10 min
+            if(gameTime>=600){envLavaTimer+=0; // already incremented
+                if(envLavaTimer>=8&&lavaPools.length<5){envLavaTimer=0;let a=Math.random()*Math.PI*2,d=100+Math.random()*300;
+                    lavaPools.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:80,life:20,dmgTimer:0});}}
+            // Speed portals every 120s
+            if(envPortalTimer>=120){envPortalTimer=0;
+                let a1=Math.random()*Math.PI*2,d1=200+Math.random()*300;
+                let a2=a1+Math.PI*(0.5+Math.random()),d2=200+Math.random()*300;
+                let portal={x1:player.x+Math.cos(a1)*d1,y1:player.y+Math.sin(a1)*d1,
+                    x2:player.x+Math.cos(a2)*d2,y2:player.y+Math.sin(a2)*d2,radius:20,life:30,cooldown:0};
+                speedPortals.push(portal);}
+            // Toxic fog after 25 min (replaces void mode)
+            if(gameTime>=1500&&!envToxicTriggered){envToxicTriggered=true;toxicFog={active:true,x:player.x,y:player.y,radius:2000};
+                addFloatingText('\u2620\uFE0F Toxic Fog incoming!',player.x,player.y-80,'#44ff44');screenShakeTimer=0.5;screenShakeIntensity=8;}
+        }
+        function updateEnvironmentalEvents(dt){
+            // Healing shrines
+            for(let i=healingShrines.length-1;i>=0;i--){let s=healingShrines[i];if(!s.active)continue;
+                if(Math.hypot(player.x-s.x,player.y-s.y)<player.radius+s.radius){
+                    let heal=Math.floor(player.maxHp*0.3);player.hp=Math.min(player.maxHp,player.hp+heal);
+                    addFloatingText(`+${heal} HP`,player.x,player.y-30,'#44ff44');healingShrines.splice(i,1);}}
+            // Lava pools
+            for(let i=lavaPools.length-1;i>=0;i--){let lp=lavaPools[i];lp.life-=dt;lp.dmgTimer+=dt;
+                if(lp.life<=0){lavaPools.splice(i,1);continue;}
+                if(lp.dmgTimer>=0.5){lp.dmgTimer=0;
+                    // Damage player
+                    if(Math.hypot(player.x-lp.x,player.y-lp.y)<player.radius+lp.radius){damagePlayer(1);}
+                    // Damage enemies
+                    for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-lp.x,e.y-lp.y)<e.radius+lp.radius){e.health-=1;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;}}}
+                    for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-lp.x,e.y-lp.y)<e.radius+lp.radius){e.health-=1;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;}}}
+                    for(let bs of bosses){if(Math.hypot(bs.x-lp.x,bs.y-lp.y)<bs.radius+lp.radius){bs.health-=1;}}
+                }}
+            // Speed portals
+            for(let i=speedPortals.length-1;i>=0;i--){let p=speedPortals[i];p.life-=dt;if(p.cooldown>0)p.cooldown-=dt;
+                if(p.life<=0){speedPortals.splice(i,1);continue;}
+                if(p.cooldown<=0){
+                    if(Math.hypot(player.x-p.x1,player.y-p.y1)<player.radius+p.radius){player.x=p.x2;player.y=p.y2;p.cooldown=2;addFloatingText('\u{1F300} Teleport!',player.x,player.y-30,'#4488ff');}
+                    else if(Math.hypot(player.x-p.x2,player.y-p.y2)<player.radius+p.radius){player.x=p.x1;player.y=p.y1;p.cooldown=2;addFloatingText('\u{1F300} Teleport!',player.x,player.y-30,'#4488ff');}
+                }}
+            // Toxic fog
+            if(toxicFog.active){toxicFog.radius=Math.max(200,toxicFog.radius-30*dt);
+                let dist=Math.hypot(player.x-toxicFog.x,player.y-toxicFog.y);
+                if(dist>toxicFog.radius){damagePlayer(Math.ceil(3*dt));}}
+        }
+        // Chain lightning helper
+        function chainLightningEffect(deadX,deadY,killDamage){
+            let nearest=null,minD=Infinity;
+            for(let e of enemies){let d=Math.hypot(e.x-deadX,e.y-deadY);if(d<120&&d<minD){minD=d;nearest=e;}}
+            for(let e of elites){let d=Math.hypot(e.x-deadX,e.y-deadY);if(d<120&&d<minD){minD=d;nearest=e;}}
+            for(let bs of bosses){let d=Math.hypot(bs.x-deadX,bs.y-deadY);if(d<120&&d<minD){minD=d;nearest=bs;}}
+            if(nearest){let chainDmg=killDamage*0.3;nearest.health-=chainDmg;addFloatingText('\u26A1'+Math.round(chainDmg),nearest.x,nearest.y-20,'#ffff44');}
+        }
         // ---------- UPDATE ----------
         function updateGame(dt,nowS){
             if(gameState!==STATE_PLAYING)return;
             gameTime+=dt;
             runStats.noDamageTimer+=dt;
-            if(gameTime>=1800&&!voidMode){voidMode=true;addFloatingText('⚠️ 虚空降临!',player.x,player.y-80,'#9944ff');screenShakeTimer=0.5;screenShakeIntensity=10;}
+            if(gameTime>=1800&&!voidMode&&!envToxicTriggered){voidMode=true;addFloatingText('⚠️ 虚空降临!',player.x,player.y-80,'#9944ff');screenShakeTimer=0.5;screenShakeIntensity=10;}
+            // Environmental events
+            spawnEnvironmentalEvents(dt,nowS);updateEnvironmentalEvents(dt);
+            // Blood Pact relic: lose 1 HP every 15 seconds
+            if(hasRelic('bloodPact')){player.bloodPactTimer=(player.bloodPactTimer||0)+dt;if(player.bloodPactTimer>=15){player.bloodPactTimer=0;player.hp-=1;if(player.hp<=0){player.hp=1;}}}
+            // Blade Storm evolution: passive aura damage
+            if(player.evolved&&player.evolvedWeapon==='Blade Storm'){bladeStormTimer+=dt;if(bladeStormTimer>=0.5){bladeStormTimer=0;
+                let auraDmg=player.damage*0.8;
+                for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius){e.health-=auraDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius){e.health-=auraDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                for(let bs of bosses){if(Math.hypot(bs.x-player.x,bs.y-player.y)<120+bs.radius){bs.health-=auraDmg;}}
+            }}
+            // Blade Vortex evolution: orbiting daggers
+            if(player.evolved&&player.evolvedWeapon==='Blade Vortex'){
+                for(let od of orbitingDaggers){od.angle+=3*dt;let ox=player.x+Math.cos(od.angle)*od.dist,oy=player.y+Math.sin(od.angle)*od.dist;
+                    for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=od.dmg*dt*3;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=od.dmg*dt*3;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let bs of bosses){if(Math.hypot(bs.x-ox,bs.y-oy)<bs.radius+8){bs.health-=od.dmg*dt*3;}}
+                }}
             // Regen
             if(player.regen>0)player.hp=Math.min(player.maxHp,player.hp+player.regen*dt);
             if(player.invincibleTimer>0)player.invincibleTimer-=dt;
@@ -1329,21 +1526,65 @@ for(let i=recentDeaths.length-1;i>=0;i--){recentDeaths[i].timer-=dt;if(recentDea
             // Bullets
             for(let i=bullets.length-1;i>=0;i--){
                 let b=bullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(b.life<=0){bullets.splice(i,1);continue;}
+                // Track maxLife for boomerang
+                if(!b.maxLife)b.maxLife=b.life+dt;
+                // Arcane Barrage: orbs grow over time
+                if(b.arcaneGrow){b.radius=Math.min(b.radius+3*dt,25);}
+                // Boomerang relic: reverse bullet direction at 40% remaining life
+                if(!b.fromBoss&&hasRelic('boomerang')&&!b.reversed){if(b.life<b.maxLife*0.4){b.reversed=true;b.vx=-b.vx;b.vy=-b.vy;}}
+                // Missile Lock relic: gently home toward nearest enemy
+                if(!b.fromBoss&&hasRelic('missileLock')){let ne=findNearestEnemy();if(ne){let mdx=ne.x-b.x,mdy=ne.y-b.y,md=Math.hypot(mdx,mdy);if(md>0.01&&md<300){let turnStr=1.5*dt;b.vx+=mdx/md*turnStr*Math.hypot(b.vx,b.vy);b.vy+=mdy/md*turnStr*Math.hypot(b.vx,b.vy);let bs2=Math.hypot(b.vx,b.vy),target=player.bulletSpeed||(b.fromBoss?200:400);b.vx=b.vx/bs2*target;b.vy=b.vy/bs2*target;}}}
                 if(!b.fromBoss){
                     let hit=false;
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
 if(e.type==='teleporter'&&(e.teleportInvuln||0)>0){b.hitEnemies.add(e);continue;}
 if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAngle+Math.PI*3)%(Math.PI*2))-Math.PI);if(da<Math.PI/4){addFloatingText('🛡',e.x,e.y-15,'#8888cc');b.hitEnemies.add(e);continue;}}
-                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;
-                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        // Elite affix: shielded - absorb damage with shield first
+                        let eDmg=b.damage;
+                        if(e.affixShield>0){let absorbed=Math.min(e.affixShield,eDmg);e.affixShield-=absorbed;eDmg-=absorbed;addFloatingText('\u{1F6E1}\uFE0F',e.x,e.y-15,'#8888ff');}
+                        e.health-=eDmg;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,eDmg,b.isCrit);runStats.damageDealt+=eDmg;if(b.isCrit)runStats.totalCrits++;
+                        if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+eDmg*player.lifesteal);
+                        // Freeze on Crit relic
+                        if(b.isCrit&&hasRelic('freezeOnCrit')){e.frozen=Math.max(e.frozen||0,0.8);}
+                        // Explosive Arrows evolution: AoE on hit
+                        if(player.evolved&&player.evolvedWeapon==='Explosive Arrows'&&b.weaponType==='arrow'&&!b.exploded){b.exploded=true;let aoe=b.damage*0.5;
+                            for(let ej=enemies.length-1;ej>=0;ej--){let ae=enemies[ej];if(ae===e)continue;if(Math.hypot(ae.x-e.x,ae.y-e.y)<60+ae.radius){ae.health-=aoe;if(ae.health<=0){spawnXpFromEnemy(ae.x,ae.y,ae.radius);enemies.splice(ej,1);if(ej<j)j--;killCount++;}}}
+                            spawnDeathParticles(e.x,e.y,30,'#ff8844',8);}
                         if(e.health<=0){
                             if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0});}}
                             if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});recentDeaths.push({x:e.x,y:e.y,timer:5});}
+                            // Chain Lightning relic
+                            if(hasRelic('chainLightning'))chainLightningEffect(e.x,e.y,b.damage);
+                            // Gold Rain relic
+                            if(hasRelic('goldRain')){let gr=2+player.level;player.gold+=gr;runStats.goldEarned+=gr;}
+                            // Soul Reaper evolution
+                            if(player.evolved&&player.evolvedWeapon==='Soul Reaper'){friendlyGhosts.push({x:e.x,y:e.y,timer:6,shootTimer:0});}
                             flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
-                        e.health-=b.damage;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,b.damage,b.isCrit);runStats.damageDealt+=b.damage;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
-                        if(e.health<=0){if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});}flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        let elDmg=b.damage;
+                        // Elite affix: shielded
+                        if(e.affixShield>0){let absorbed=Math.min(e.affixShield,elDmg);e.affixShield-=absorbed;elDmg-=absorbed;addFloatingText('\u{1F6E1}\uFE0F',e.x,e.y-15,'#8888ff');}
+                        // Elite affix: thorny
+                        if(e.affixes&&e.affixes.some(a=>a.id==='thorny')){damagePlayer(3);}
+                        e.health-=elDmg;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,elDmg,b.isCrit);runStats.damageDealt+=elDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+elDmg*player.lifesteal);
+                        // Freeze on Crit relic
+                        if(b.isCrit&&hasRelic('freezeOnCrit')){e.frozen=Math.max(e.frozen||0,0.8);}
+                        if(e.health<=0){if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});}
+                            // Elite affix: splitting - spawn 2 mini elites
+                            if(e.affixes&&e.affixes.some(a=>a.id==='splitting')){for(let s=0;s<2;s++){let sa=Math.random()*Math.PI*2;enemies.push({x:e.x+Math.cos(sa)*20,y:e.y+Math.sin(sa)*20,radius:e.radius*0.6,health:e.maxHealth*0.3,maxHealth:e.maxHealth*0.3,speed:e.speed*1.3,isBoss:false,isElite:false,type:'normal',attackTimer:0});}}
+                            // Chain Lightning relic
+                            if(hasRelic('chainLightning'))chainLightningEffect(e.x,e.y,b.damage);
+                            // Gold Rain relic
+                            if(hasRelic('goldRain')){let gr=2+player.level;player.gold+=gr;runStats.goldEarned+=gr;}
+                            // Soul Reaper evolution
+                            if(player.evolved&&player.evolvedWeapon==='Soul Reaper'){friendlyGhosts.push({x:e.x,y:e.y,timer:6,shootTimer:0});}
+                            // Relic drop from elite (25%)
+                            tryRelicDrop(true,false);
+                            flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
+                            // Check relic pending after elite death
+                            if(relicDropPending){triggerRelicSelection();}
+                        }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
                         let bDmg=b.damage;
                         if(bs.bossType==='juggernaut'){
@@ -1353,7 +1594,17 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                             bDmg=Math.max(1,bDmg-(bs.armor||0));
                         }
                         bs.health-=bDmg;b.hitEnemies.add(bs);showDmg(bs,bDmg,b.isCrit);runStats.damageDealt+=bDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+b.damage*player.lifesteal);
+                        // Freeze on Crit relic on boss
+                        if(b.isCrit&&hasRelic('freezeOnCrit')){bs.frozen=Math.max(bs.frozen||0,0.8);}
                         if(bs.health<=0){flushDmg(bs);bosses.splice(j,1);if(bs.isClone){spawnDeathParticles(bs.x,bs.y,bs.radius,'#ff88ff',8);continue;}spawnXpFromEnemy(bs.x,bs.y,bs.radius,true);killCount++;bossKillCount++;player.pacifistTimer=0;
+                            // Chain Lightning relic
+                            if(hasRelic('chainLightning'))chainLightningEffect(bs.x,bs.y,bDmg);
+                            // Gold Rain relic
+                            if(hasRelic('goldRain')){let gr=2+player.level;player.gold+=gr;runStats.goldEarned+=gr;}
+                            // Soul Reaper evolution
+                            if(player.evolved&&player.evolvedWeapon==='Soul Reaper'){friendlyGhosts.push({x:bs.x,y:bs.y,timer:6,shootTimer:0});}
+                            // Relic drop from boss (100%)
+                            tryRelicDrop(false,true);
                             if(bs.bossType==='twins_fire'||bs.bossType==='twins_ice'){
                                 for(let ob of bosses){if((ob.bossType==='twins_fire'||ob.bossType==='twins_ice')&&ob!==bs){
                                     ob.speed*=1.5;ob.attackInterval*=0.5;ob.health=ob.maxHealth;ob.enraged=true;
@@ -1362,6 +1613,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                             let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];shopRefreshCount=0;
                             let role=ROLES[selectedRole];
                             if(role&&role.skill&&skillLevel<MAX_SKILL_LEVEL){skillUpOptions=generateSkillUpOptions();gameState=STATE_SKILL_UP;}
+                            else if(relicDropPending){triggerRelicSelection();}
                             else{gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;}}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(hit){bullets.splice(i,1);continue;}
                 }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);if(b.slows)player.slowTimer=2.0;bullets.splice(i,1);continue;}}
@@ -1372,6 +1624,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
             for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i],dx=player.x-o.x,dy=player.y-o.y,d=Math.hypot(dx,dy);
                 if(d<player.radius+o.radius){
                     let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
+                    if(hasRelic('xpFeast'))mult*=1.3;
                     player.exp+=o.value*mult;xpOrbs.splice(i,1);
                 }else if(o.vacuumed){let spd=600*dt;o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;
                 }else if(effMagnet>0&&d<effMagnet){let spd=250*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
@@ -1392,12 +1645,21 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                         tryDodgeOrDamage(Math.floor(Math.max(3,Math.floor(e.radius))*eDmgScale));
                         addFloatingText("💥",e.x,e.y,"#ff8800");screenShakeTimer=0.15;screenShakeIntensity=6;
                         spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
-                    }else{let cdmg=e.type==='teleporter'?Math.floor(Math.max(3,e.radius)*eDmgScale):Math.floor(Math.max(1,Math.floor(e.radius/5))*eDmgScale);tryDodgeOrDamage(cdmg);}
+                    }else{let cdmg=e.type==='teleporter'?Math.floor(Math.max(3,e.radius)*eDmgScale):Math.floor(Math.max(1,Math.floor(e.radius/5))*eDmgScale);tryDodgeOrDamage(cdmg);
+                        // Thorns relic: deal 5 dmg back on contact
+                        if(hasRelic('thorns')&&player.invincibleTimer<=INVINCIBLE_DURATION+0.01){e.health-=5;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;}}}
                 }
             }
             // Player vs elites
             for(let e of elites){let dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy),md=player.radius+e.radius;
-                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}tryDodgeOrDamage(Math.floor(Math.max(2,Math.floor(e.radius/4))*getEliteStatScale().dmgMult));}}
+                if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.6;player.y+=Math.sin(a)*ov*0.6;}
+                    // Elite affix: vampiric - heal elite 10% of damage dealt
+                    let elContactDmg=Math.floor(Math.max(2,Math.floor(e.radius/4))*getEliteStatScale().dmgMult);
+                    tryDodgeOrDamage(elContactDmg);
+                    if(e.affixes&&e.affixes.some(a2=>a2.id==='vampiric')){e.health=Math.min(e.maxHealth,e.health+elContactDmg*0.1);}
+                    // Thorns relic
+                    if(hasRelic('thorns')){e.health-=5;}
+                }}
             // Player vs bosses
             for(let bs of bosses){let dx=player.x-bs.x,dy=player.y-bs.y,dist=Math.hypot(dx,dy),md=player.radius+bs.radius;
                 if(dist<md){if(dist>0.001){let ov=md-dist,a=Math.atan2(dy,dx);player.x+=Math.cos(a)*ov*0.4;player.y+=Math.sin(a)*ov*0.4;}tryDodgeOrDamage(Math.floor(bs.contactDamage*getBossStatScale().dmgMult));}}
@@ -1464,6 +1726,23 @@ for(let g of friendlyGhosts){let{x,y}=w2s(g.x,g.y);let al=Math.min(1,g.timer/1.0
                 else{ctx.beginPath();ctx.arc(x,y,b.radius-1,0,Math.PI*2);if(b.isCrit){ctx.fillStyle="#ffaa66";ctx.shadowColor="#ff8800";}else{ctx.fillStyle="#6dd5ff";ctx.shadowColor="#00a6ff";}ctx.shadowBlur=12;ctx.fill();}
             }
 
+            // Environmental events
+            // Healing shrines (green glow)
+            for(let s of healingShrines){if(!s.active)continue;let{x,y}=w2s(s.x,s.y);
+                ctx.beginPath();ctx.arc(x,y,s.radius,0,Math.PI*2);ctx.fillStyle='rgba(50,255,100,0.15)';ctx.shadowColor='#44ff44';ctx.shadowBlur=25;ctx.fill();ctx.shadowBlur=0;
+                ctx.strokeStyle='rgba(50,255,100,0.6)';ctx.lineWidth=2;ctx.stroke();
+                ctx.fillStyle='#44ff44';ctx.font='18px monospace';ctx.textAlign='center';ctx.fillText('\u2764\uFE0F',x,y+6);ctx.textAlign='left';}
+            // Lava pools (orange glow)
+            for(let lp of lavaPools){let{x,y}=w2s(lp.x,lp.y);let al=Math.min(1,lp.life/3);
+                ctx.beginPath();ctx.arc(x,y,lp.radius,0,Math.PI*2);ctx.fillStyle=`rgba(255,100,0,${0.2*al})`;ctx.shadowColor='#ff4400';ctx.shadowBlur=20;ctx.fill();ctx.shadowBlur=0;
+                ctx.strokeStyle=`rgba(255,150,50,${0.5*al})`;ctx.lineWidth=2;ctx.stroke();}
+            // Speed portals (blue swirl)
+            for(let p of speedPortals){
+                for(let pi=0;pi<2;pi++){let px=pi===0?p.x1:p.x2,py=pi===0?p.y1:p.y2;let{x,y}=w2s(px,py);
+                    let spin=Date.now()/200;
+                    ctx.beginPath();ctx.arc(x,y,p.radius,0,Math.PI*2);ctx.fillStyle='rgba(68,136,255,0.2)';ctx.shadowColor='#4488ff';ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+                    ctx.strokeStyle='rgba(100,180,255,0.7)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,p.radius,spin,spin+Math.PI);ctx.stroke();}}
+            // Toxic fog overlay (drawn in screen space later)
             // Chests (cyan)
             for(let c of chests){if(c.isOpen)continue;let{x,y}=w2s(c.x,c.y);ctx.beginPath();ctx.arc(x,y,c.radius,0,Math.PI*2);ctx.fillStyle="#00ccaa";ctx.shadowColor="#00ffcc";ctx.shadowBlur=20;ctx.fill();
                 ctx.shadowBlur=0;ctx.fillStyle="#000";ctx.font="20px monospace";ctx.fillText("?",x-7,y+7);
@@ -1492,8 +1771,12 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
 
             // Elites
             for(let e of elites){let{x,y}=w2s(e.x,e.y);ctx.beginPath();ctx.arc(x,y,e.radius,0,Math.PI*2);ctx.fillStyle=(e.frozen||0)>0?'#6699cc':'#ff9933';ctx.shadowColor=(e.frozen||0)>0?'#4488ff':'#ff7700';ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
-                ctx.fillStyle="#fff";ctx.font="12px monospace";ctx.textAlign="center";ctx.fillText("精英",x,y-e.radius-14);
-                let bw=e.radius*2.5,bh=4,bx=x-bw/2,by=y-e.radius-10;ctx.fillStyle="#333";ctx.fillRect(bx,by,bw,bh);let hp=e.health/e.maxHealth;ctx.fillStyle=hp>0.5?"#ff9933":hp>0.25?"#ff6600":"#ff3300";ctx.fillRect(bx,by,bw*hp,bh);ctx.textAlign="left";}
+                // Elite affix shield bar
+                if(e.affixShield>0){let sw=e.radius*2.5,sh=3,sx=x-sw/2,sy2=y-e.radius-4;ctx.fillStyle='#4444aa';ctx.fillRect(sx,sy2,sw,sh);ctx.fillStyle='#8888ff';ctx.fillRect(sx,sy2,sw*(e.affixShield/(e.maxHealth*0.3)),sh);}
+                ctx.fillStyle="#fff";ctx.font="12px monospace";ctx.textAlign="center";ctx.fillText("精英",x,y-e.radius-18);
+                // Draw affix icons above elite
+                if(e.affixes&&e.affixes.length>0){let affixStr=e.affixes.map(a=>a.icon).join('');ctx.font="12px monospace";ctx.fillText(affixStr,x,y-e.radius-30);}
+                let bw=e.radius*2.5,bh=4,bx=x-bw/2,by=y-e.radius-14;ctx.fillStyle="#333";ctx.fillRect(bx,by,bw,bh);let hp=e.health/e.maxHealth;ctx.fillStyle=hp>0.5?"#ff9933":hp>0.25?"#ff6600":"#ff3300";ctx.fillRect(bx,by,bw*hp,bh);ctx.textAlign="left";}
 
             // Bosses
             for(let bs of bosses){let{x,y}=w2s(bs.x,bs.y),bt=BOSS_TYPES[bs.bossType];ctx.beginPath();ctx.arc(x,y,bs.radius,0,Math.PI*2);
@@ -1532,7 +1815,12 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if(sa.type==='frostNova'){sa.radius=Math.min(200+SKILL_MODS.frostNovaRange,sa.radius+800*(1/60));ctx.beginPath();ctx.arc(sp.x,sp.y,sa.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,136,255,${sa.timer*1.5})`;ctx.lineWidth=3;ctx.stroke();
                     ctx.fillStyle=`rgba(150,200,255,${sa.timer*0.2})`;ctx.fill();}
             }
-            // Thorns visual
+            // Blade Storm aura visual
+            if(player.evolved&&player.evolvedWeapon==='Blade Storm'){let pulse=0.3+0.2*Math.sin(Date.now()/200);ctx.beginPath();ctx.arc(sp.x,sp.y,120,0,Math.PI*2);ctx.strokeStyle=`rgba(255,150,50,${pulse})`;ctx.lineWidth=3;ctx.stroke();
+                for(let bi=0;bi<6;bi++){let ba=Date.now()/200+bi*Math.PI/3;ctx.fillStyle=`rgba(255,180,80,${pulse*0.7})`;ctx.fillRect(sp.x+Math.cos(ba)*100-3,sp.y+Math.sin(ba)*100-3,6,6);}}
+            // Blade Vortex daggers visual
+            if(player.evolved&&player.evolvedWeapon==='Blade Vortex'){for(let od of orbitingDaggers){let ox=sp.x+Math.cos(od.angle)*od.dist,oy=sp.y+Math.sin(od.angle)*od.dist;
+                ctx.save();ctx.translate(ox,oy);ctx.rotate(od.angle+Math.PI/2);ctx.fillStyle='#cc99ff';ctx.shadowColor='#9944ff';ctx.shadowBlur=10;ctx.fillRect(-3,-8,6,16);ctx.shadowBlur=0;ctx.restore();}}
             // Damage flash
             if(player.damageFlash>0){let al=Math.min(1,player.damageFlash/0.3);ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius+5,0,Math.PI*2);ctx.strokeStyle=`rgba(255,40,40,${al*0.8})`;ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.arc(sp.x,sp.y,player.radius,0,Math.PI*2);ctx.fillStyle=`rgba(255,0,0,${al*0.35})`;ctx.fill();}
             // Aim line (keyboard only)
@@ -1596,6 +1884,17 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5a0d0";
                 ctx.fillText(controlMode==='touch'?"点击选项强化技能":"按数字键 1/2/3 选择",pnX+110,pnY+300);
             }
+            // Relic selection screen
+            if(gameState===STATE_RELIC&&relicChoices.length>0){
+                ctx.fillStyle="#1a2a1ad9";ctx.shadowBlur=0;ctx.fillRect(pnX,pnY,pnW,pnH);ctx.strokeStyle="#ffd966";ctx.lineWidth=6;ctx.strokeRect(pnX,pnY,pnW,pnH);
+                ctx.font="bold 34px 'Courier New'";ctx.fillStyle="#ffd966";ctx.fillText("\u{1F48E} Relic Found!",pnX+150,pnY+70);
+                ctx.font="16px monospace";ctx.fillStyle="#aaa";ctx.fillText(`${player.relics.length}/5 relics`,pnX+440,pnY+70);
+                ctx.font="26px 'Courier New'";ctx.textBaseline="middle";
+                ctx.textAlign="right";for(let i=0;i<relicChoices.length;i++){ctx.fillStyle="#c7b087";ctx.fillText(`[${i+1}]`,pnX+90,pnY+130+i*60);}
+                ctx.textAlign="left";for(let i=0;i<relicChoices.length;i++){let rc2=relicChoices[i];ctx.fillStyle="#f0dbb4";ctx.fillText(`${rc2.icon} ${rc2.name}`,pnX+110,pnY+130+i*60);ctx.font="14px monospace";ctx.fillStyle="#aaa";ctx.fillText(rc2.desc,pnX+110,pnY+150+i*60);ctx.font="26px 'Courier New'";}
+                ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5c9b0";
+                ctx.fillText(controlMode==='touch'?"Tap to choose":"Press 1/2/3 to choose",pnX+110,pnY+300);
+            }
             // Shop screen
             if(gameState===STATE_SHOP){
                 ctx.fillStyle="#1e2a3ad9";ctx.shadowBlur=0;ctx.fillRect(pnX,pnY,pnW,pnH);ctx.strokeStyle="#ffd966";ctx.lineWidth=6;ctx.strokeRect(pnX,pnY,pnW,pnH);
@@ -1634,9 +1933,25 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
     ctx.fillText(controlMode==='touch'?"点击屏幕重新开始":"点击 [重来] 再试一次",W/2,ly+30);ctx.textAlign="left";
 }
 
+            // Toxic fog overlay (world-relative dark overlay outside safe circle)
+            if(toxicFog.active){let fogC=w2s(toxicFog.x,toxicFog.y);let fogR=toxicFog.radius*(W/(1600));
+                ctx.save();ctx.fillStyle='rgba(0,80,0,0.25)';ctx.beginPath();ctx.rect(0,0,W,H);ctx.arc(fogC.x,fogC.y,fogR,0,Math.PI*2,true);ctx.fill();
+                ctx.strokeStyle='rgba(50,255,50,0.5)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(fogC.x,fogC.y,fogR,0,Math.PI*2);ctx.stroke();ctx.restore();}
+
             ctx.restore(); // End screen shake
 
             // --- HUD elements drawn WITHOUT shake ---
+
+            // Relic HUD icons (top of screen)
+            if(player.relics&&player.relics.length>0){
+                let rx=W/2-player.relics.length*18;
+                ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(rx-5,130,player.relics.length*36+10,28);
+                ctx.font='20px monospace';ctx.textAlign='center';
+                for(let i=0;i<player.relics.length;i++){ctx.fillText(player.relics[i].icon,rx+18+i*36,152);}
+                ctx.textAlign='left';
+            }
+            // Weapon evolution indicator
+            if(player.evolved&&player.evolvedWeapon){ctx.fillStyle='#ffd966';ctx.font='bold 13px monospace';ctx.fillText('\u2728 '+player.evolvedWeapon,20,140);}
 
             // Minimap (top-right)
             if(gameSettings.minimap){
@@ -1648,6 +1963,10 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             for(let e of elites){let mx=mmX+mmW/2+(e.x-player.x)*mmScale,my=mmY+mmH/2+(e.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#ff9933';ctx.fillRect(mx-2,my-2,4,4);}}
             for(let bs of bosses){let mx=mmX+mmW/2+(bs.x-player.x)*mmScale,my=mmY+mmH/2+(bs.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle=BOSS_TYPES[bs.bossType].color;ctx.beginPath();ctx.arc(mx,my,4,0,Math.PI*2);ctx.fill();}}
             for(let c of chests){if(c.isOpen)continue;let mx=mmX+mmW/2+(c.x-player.x)*mmScale,my=mmY+mmH/2+(c.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#00ccaa';ctx.fillRect(mx-2,my-2,4,4);}}
+            // Environmental on minimap
+            for(let s of healingShrines){if(!s.active)continue;let mx=mmX+mmW/2+(s.x-player.x)*mmScale,my=mmY+mmH/2+(s.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#44ff44';ctx.fillRect(mx-2,my-2,4,4);}}
+            for(let lp of lavaPools){let mx=mmX+mmW/2+(lp.x-player.x)*mmScale,my=mmY+mmH/2+(lp.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#ff6600';ctx.fillRect(mx-2,my-2,4,4);}}
+            for(let p of speedPortals){for(let pi=0;pi<2;pi++){let px=pi===0?p.x1:p.x2,py=pi===0?p.y1:p.y2;let mx=mmX+mmW/2+(px-player.x)*mmScale,my=mmY+mmH/2+(py-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#4488ff';ctx.beginPath();ctx.arc(mx,my,3,0,Math.PI*2);ctx.fill();}}}
             // Player dot on minimap
             ctx.fillStyle='#ffffff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);
             }
@@ -1728,6 +2047,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;e.preventDefault();}
                 else if(k===' '&&gameState===STATE_PLAYING){triggerDash();e.preventDefault();}
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
+                else if(gameState===STATE_RELIC){if(k==='1')applyRelic(0);if(k==='2')applyRelic(1);if(k==='3')applyRelic(2);e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_UPGRADE){if(k==='1')applyUpgrade(0);if(k==='2')applyUpgrade(1);if(k==='3')applyUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_SHOP){if(stateInputCooldown>0){e.preventDefault();}else{if(k==='1')buyShopItem(0);if(k==='2')buyShopItem(1);if(k==='3')buyShopItem(2);if(k==='r')refreshShop();if(k==='enter')gameState=STATE_PLAYING;e.preventDefault();}}
