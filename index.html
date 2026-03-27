@@ -362,12 +362,13 @@
             if(!isMP||!mpChannel)return;
             let now=Date.now();if(now-lastMPBroadcast<MP_SYNC_RATE)return;lastMPBroadcast=now;
             let roleData=ROLES[selectedRole]||ROLES.dot;
+            let amAlive=gameState!==STATE_GAMEOVER;
             mpChannel.send({type:'broadcast',event:'state',payload:{
                 id:myMPId,nick:playerNickname,role:selectedRole,
-                x:Math.round(player.x),y:Math.round(player.y),
+                x:Math.round(amAlive?player.x:mpGhostX),y:Math.round(amAlive?player.y:mpGhostY),
                 hp:Math.floor(player.hp),maxHp:player.maxHp,
-                alive:gameState!==STATE_GAMEOVER,
-                ghostX:Math.round(player.x),ghostY:Math.round(player.y),
+                alive:amAlive,
+                ghostX:Math.round(mpGhostX),ghostY:Math.round(mpGhostY),
                 level:player.level,color:roleData.color,
                 isDashing:player.isDashing,invincible:player.invincibleTimer>0
             }});
@@ -391,6 +392,8 @@
         let resChanneling=false, resChannelTarget=null, resChannelProgress=0;
         const RES_CHANNEL_TIME=3.5; // seconds to stand in circle
         const RES_CIRCLE_RADIUS=100; // circle size around ghost
+        // Ghost state for dead player in MP
+        let mpGhostX=0, mpGhostY=0, mpIsDead=false;
 
         function updateResurrection(dt){
             if(!isMP||resCooldown>0||gameState===STATE_GAMEOVER||gameState!==STATE_PLAYING){
@@ -429,11 +432,14 @@
 
         function handleResurrection(data){
             if(data.targetId===myMPId&&gameState===STATE_GAMEOVER){
-                // I got resurrected!
+                // I got resurrected! Move player to ghost position
+                player.x=mpGhostX;player.y=mpGhostY;
+                worldOffsetX=player.x-W/2;worldOffsetY=player.y-H/2;
                 gameState=STATE_PLAYING;
                 player.hp=Math.floor(player.maxHp*0.5);
                 player.invincibleTimer=3.0;
-                addFloatingText('💫 被 '+data.byNick+' 复活了!',player.x,player.y-50,'#44ff44');
+                mpIsDead=false;
+                addFloatingText('\u{1F4AB} 被 '+data.byNick+' 复活了!',player.x,player.y-50,'#44ff44');
                 screenShakeTimer=0.3;screenShakeIntensity=6;
             }
         }
@@ -1060,6 +1066,8 @@
                 player.invincibleTimer=3.0;addFloatingText('\u{1F4A8} Second Wind!',player.x,player.y-50,'#88ddff');screenShakeTimer=0.3;screenShakeIntensity=6;}
             if(player.hp<=0){
                 gameState=STATE_GAMEOVER;screenShakeTimer=0.35;screenShakeIntensity=12;
+                // In MP: become ghost instead of ending
+                if(isMP){mpGhostX=player.x;mpGhostY=player.y;mpIsDead=true;}
                 metaStats.totalKills+=killCount;metaStats.totalBossKills+=bossKillCount;
                 let mutBonus=activeMutators.reduce((s,m)=>{let mt=MUTATORS.find(x=>x.id===m);return s+(mt?mt.soulBonus:0);},0);let earnedSouls=Math.floor(gameTime/60)*3+player.level*1+bossKillCount*5+mutBonus;
                 metaStats.soulStones+=earnedSouls;
@@ -1113,6 +1121,7 @@
             if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
             myCanResurrect=true;resCooldown=0;resChanneling=false;resChannelTarget=null;resChannelProgress=0;
+            mpGhostX=0;mpGhostY=0;mpIsDead=false;
             let resHint=document.getElementById('resHint');if(resHint)resHint.style.display=isMP?'':'none';
             updateUI();
         }
@@ -2266,27 +2275,45 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(gameState===STATE_PAUSED){ctx.fillStyle="#000000aa";ctx.fillRect(0,0,W,H);ctx.font="56px 'Courier New'";ctx.fillStyle="#dddddd";ctx.textAlign="center";ctx.fillText("⏸ 暂停",W/2,280);ctx.font="24px monospace";ctx.fillStyle="#b5a87d";ctx.fillText(controlMode==='touch'?"点击屏幕继续":`按 ${keyMap.pause.toUpperCase()} 继续`,W/2,360);ctx.textAlign="left";}
             // Game over
             if(gameState===STATE_GAMEOVER){
+    if(isMP&&mpIsDead){
+        // MP ghost mode: semi-transparent overlay, show ghost + "waiting" message
+        ctx.fillStyle="rgba(0,0,20,0.4)";ctx.fillRect(0,0,W,H);
+        // Draw ghost at center of screen
+        let ghostPulse=0.5+0.3*Math.sin(Date.now()/300);
+        ctx.globalAlpha=ghostPulse;ctx.fillStyle='rgba(136,136,255,0.4)';
+        ctx.beginPath();ctx.arc(W/2,H/2,PLAYER_RADIUS+6,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=1;ctx.fillStyle='#8888ff';ctx.font='24px monospace';ctx.textAlign='center';
+        ctx.fillText('\u{1F47B}',W/2,H/2+8);
+        ctx.font='bold 20px monospace';ctx.fillStyle='#aaaaff';
+        ctx.fillText('\u{1F4AB} 等待队友复活...',W/2,H/2-40);
+        ctx.font='14px monospace';ctx.fillStyle='#888';
+        ctx.fillText('WASD 移动灵魂 · 可以吸收经验球 (50%)',W/2,H/2+50);
+        ctx.fillText('Lv'+player.level+' | EXP '+Math.floor(player.exp)+'/'+player.nextExp,W/2,H/2+72);
+        ctx.textAlign='left';
+    }else{
+    // Solo game over: full stats screen
     ctx.fillStyle="#000000dd";ctx.fillRect(0,0,W,H);
     ctx.textAlign="center";
-    ctx.font="bold 40px 'Courier New'";ctx.fillStyle="#e05a5a";ctx.fillText("💔 熄灭了",W/2,80);
+    ctx.font="bold 40px 'Courier New'";ctx.fillStyle="#e05a5a";ctx.fillText("\u{1F494} 熄灭了",W/2,80);
     ctx.font="18px monospace";ctx.fillStyle="#fadf9e";
     let h=Math.floor(gameTime/3600),mn=Math.floor((gameTime%3600)/60),sc=Math.floor(gameTime%60);
     let timeStr=`${h.toString().padStart(2,'0')}:${mn.toString().padStart(2,'0')}:${sc.toString().padStart(2,'0')}`;
     let col1x=W/2-180,col2x=W/2+20,ly=130,lh=30;
     ctx.textAlign="left";ctx.fillStyle="#cbad8e";ctx.font="16px monospace";
-    ctx.fillText("⏱️ 存活时间",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(timeStr,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("⚡ 等级",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+player.level,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("💀 击杀数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+killCount,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("👑 Boss击杀",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+bossKillCount,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("💰 金币获得",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.goldEarned,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("🔮 灵魂石",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText("+"+(Math.floor(gameTime/60)*3+player.level+bossKillCount*5),col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("⚔️ 总伤害",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+Math.round(runStats.damageDealt),col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("🔥 最高连击",col1x,ly);ctx.fillStyle="#ffaa44";ctx.fillText("x"+runStats.highestCombo,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("💥 暴击次数",col1x,ly);ctx.fillStyle="#ff4444";ctx.fillText(""+runStats.totalCrits,col2x,ly);ly+=lh;
-    ctx.fillStyle="#cbad8e";ctx.fillText("📈 升级次数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.upgradesTaken,col2x,ly);ly+=lh;
-    if(activeMutators.length>0){ly+=lh;ctx.fillStyle="#cbad8e";ctx.fillText("⚙️ 变体",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText(activeMutators.length+'个',col2x,ly);}
+    ctx.fillText("\u23F1\uFE0F 存活时间",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(timeStr,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u26A1 等级",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+player.level,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F480} 击杀数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+killCount,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F451} Boss击杀",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+bossKillCount,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F4B0} 金币获得",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.goldEarned,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F52E} 灵魂石",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText("+"+(Math.floor(gameTime/60)*3+player.level+bossKillCount*5),col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u2694\uFE0F 总伤害",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+Math.round(runStats.damageDealt),col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F525} 最高连击",col1x,ly);ctx.fillStyle="#ffaa44";ctx.fillText("x"+runStats.highestCombo,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F4A5} 暴击次数",col1x,ly);ctx.fillStyle="#ff4444";ctx.fillText(""+runStats.totalCrits,col2x,ly);ly+=lh;
+    ctx.fillStyle="#cbad8e";ctx.fillText("\u{1F4C8} 升级次数",col1x,ly);ctx.fillStyle="#fadf9e";ctx.fillText(""+runStats.upgradesTaken,col2x,ly);ly+=lh;
+    if(activeMutators.length>0){ly+=lh;ctx.fillStyle="#cbad8e";ctx.fillText("\u2699\uFE0F 变体",col1x,ly);ctx.fillStyle="#b366ff";ctx.fillText(activeMutators.length+'\u4E2A',col2x,ly);}
     ctx.textAlign="center";ctx.font="20px monospace";ctx.fillStyle="#b5a87d";
     ctx.fillText(controlMode==='touch'?"点击屏幕重新开始":"点击 [重来] 再试一次",W/2,ly+30);ctx.textAlign="left";
+    }
 }
 
             // Toxic fog overlay (world-relative dark overlay outside safe circle)
@@ -2316,7 +2343,8 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 ctx.fillStyle='#88ddff';ctx.fillText('\u{1F465} Room: '+roomCode,14,mpY);mpY+=16;
                 for(let id in otherPlayers){let op=otherPlayers[id];
                     ctx.fillStyle=op.alive?(op.color||'#fff'):'#666';
-                    ctx.fillText((op.alive?'\u2764\uFE0F':'\u{1F480}')+' '+op.nick+' Lv'+op.level+' '+(op.alive?Math.floor(op.hp)+'/'+op.maxHp:'DEAD'),14,mpY);mpY+=16;}
+                    let opStatus=op.alive?Math.floor(op.hp)+'/'+op.maxHp:'\u{1F47B} 等待复活';
+                    ctx.fillText((op.alive?'\u2764\uFE0F':'\u{1F480}')+' '+op.nick+' Lv'+(op.level||1)+' '+opStatus,14,mpY);mpY+=16;}
                 // Resurrect status
                 if(resChanneling){ctx.fillStyle='#44ff44';ctx.fillText('\u{1F4AB} 复活中 '+Math.ceil(RES_CHANNEL_TIME-resChannelProgress)+'s',14,mpY);}
                 else if(resCooldown>0){ctx.fillStyle='#888';ctx.fillText('\u{1F4AB} 冷却 '+Math.ceil(resCooldown)+'s',14,mpY);}
@@ -2404,8 +2432,28 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
-            // Broadcast state even when dead so ghost shows for others
-            if(isMP&&gameState===STATE_GAMEOVER){broadcastMyState();cleanupDisconnected();}
+            // MP ghost mode: move ghost, eat orbs, broadcast state
+            if(isMP&&gameState===STATE_GAMEOVER&&mpIsDead){
+                broadcastMyState();cleanupDisconnected();
+                // Ghost movement (WASD or joystick)
+                let gmx=0,gmy=0;
+                if(controlMode==='touch'&&leftJoy.active){
+                    let jdx=leftJoy.kx-leftJoy.bx,jdy=leftJoy.ky-leftJoy.by,jd=Math.hypot(jdx,jdy);
+                    if(jd>JOY_DEAD){gmx=jdx/jd;gmy=jdy/jd;}
+                }else{
+                    if(keys[keyMap.up])gmy-=1;if(keys[keyMap.down])gmy+=1;if(keys[keyMap.left])gmx-=1;if(keys[keyMap.right])gmx+=1;
+                }
+                if(gmx||gmy){let gl=Math.hypot(gmx,gmy);mpGhostX+=gmx/gl*180*dt;mpGhostY+=gmy/gl*180*dt;}
+                worldOffsetX=mpGhostX-W/2;worldOffsetY=mpGhostY-H/2;
+                // Ghost eats XP orbs
+                for(let i=xpOrbs.length-1;i>=0;i--){
+                    let o=xpOrbs[i],d=Math.hypot(mpGhostX-o.x,mpGhostY-o.y);
+                    if(d<30+o.radius){player.exp+=Math.floor(o.value*0.5);xpOrbs.splice(i,1);}
+                    else if(d<80){let spd=150*dt;o.x+=(mpGhostX-o.x)/d*spd;o.y+=(mpGhostY-o.y)/d*spd;}
+                }
+                // Keep game time ticking for ghost
+                gameTime+=dt;
+            }
             updateAchievePopup(dt);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
             if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
