@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dot · Roguelike</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { background:#0b0e14; min-height:100vh; display:flex; justify-content:center; align-items:center; font-family:'Courier New',Courier,monospace; touch-action:manipulation; }
@@ -100,6 +101,22 @@
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
         </div>
+        <div style="margin-top:12px;width:100%;max-width:500px">
+            <div style="color:#cbad8e;font-size:1rem;text-align:center;margin-bottom:8px">👥 多人模式 (最多4人)</div>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+                <button class="mode-btn" id="createRoomBtn" style="min-width:150px">🏠 创建房间<small>Create Room</small></button>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <input type="text" id="joinCodeInput" placeholder="输入房间号" maxlength="4" style="background:#10131f;border:2px solid #6b4f3a;border-radius:12px;padding:8px 12px;color:#fadf9e;font-family:inherit;font-size:1rem;width:120px;text-align:center;outline:none;text-transform:uppercase">
+                    <button class="mode-btn" id="joinRoomBtn" style="min-width:100px">🚪 加入<small>Join</small></button>
+                </div>
+            </div>
+            <div id="roomLobby" style="display:none;margin-top:10px;background:#1a1f2b;border:2px solid #6b4f3a;border-radius:12px;padding:12px;text-align:center">
+                <div style="color:#ffd966;font-size:1.2rem;margin-bottom:6px">房间: <span id="roomCodeDisplay" style="letter-spacing:4px;font-size:1.5rem"></span></div>
+                <div id="roomPlayerList" style="color:#cbad8e;font-size:0.9rem;margin-bottom:8px"></div>
+                <button class="mode-btn" id="startMPBtn" style="display:none;min-width:150px">▶️ 开始游戏<small>Start Game</small></button>
+                <button class="mode-btn" id="leaveRoomBtn" style="min-width:100px;background:#5a3a3a">❌ 离开<small>Leave</small></button>
+            </div>
+        </div>
     </div>
     <div id="achievePopup"><span id="achieveText"></span></div>
     <div id="rotateOverlay"><div class="rotate-icon">📱🔄</div><div>请横屏使用<br>Please rotate to landscape</div></div>
@@ -121,6 +138,7 @@
                 <span class="key-hint" id="interactHint">E 开启宝箱</span>
                 <span class="key-hint">Space 闪避</span>
                 <span class="key-hint">Q 技能</span>
+                <span class="key-hint" id="resHint" style="display:none">R 复活队友</span>
                 <span class="key-hint" id="pauseHint">P 暂停</span>
                 <span class="key-hint" id="settingsHint">F 设置</span>
                 <button id="fullscreenBtn">⛶ 全屏</button>
@@ -193,6 +211,208 @@
             soulBolt:{stat:'lifesteal',threshold:0.02,name:'Soul Reaper',announce:'\u{1F480} Soul Reaper!'},
         };
         let voidMode=false;
+
+        // ====== MULTIPLAYER SYSTEM ======
+        let isMP=false, mpChannel=null, myMPId='', roomCode='', isRoomHost=false;
+        let otherPlayers={}; // {id: {nick,role,x,y,hp,maxHp,alive,ghostX,ghostY,level,color}}
+        let myCanResurrect=true, resCooldown=0;
+        const MP_COLORS=['#f0f0ff','#ff6666','#66ff66','#ffcc44'];
+        const MP_SB_URL='https://ljlsruiydrsxetamtptm.supabase.co';
+        const MP_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNydWl5ZHJzeGV0YW10cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMjkzMjgsImV4cCI6MjA4ODcwNTMyOH0.3jofw4NPGiKgoVq6WZNQsU9o8Xv1n_nd07ZKYX-O3dU';
+        let sbClient=null;
+        let lastMPBroadcast=0;
+        const MP_SYNC_RATE=100; // ms between state broadcasts
+
+        function initSBClient(){
+            if(!sbClient&&window.supabase){sbClient=window.supabase.createClient(MP_SB_URL,MP_SB_KEY);}
+        }
+
+        function genRoomCode(){return Math.random().toString(36).substring(2,6).toUpperCase();}
+
+        function createRoom(){
+            initSBClient();if(!sbClient)return;
+            roomCode=genRoomCode();myMPId=Date.now()+'_'+Math.random().toString(36).slice(2,6);isRoomHost=true;
+            joinChannel();
+            document.getElementById('roomCodeDisplay').textContent=roomCode;
+            document.getElementById('roomLobby').style.display='block';
+            document.getElementById('startMPBtn').style.display='inline-block';
+            updateRoomPlayerList();
+        }
+
+        function joinRoom(){
+            initSBClient();if(!sbClient)return;
+            let code=document.getElementById('joinCodeInput').value.trim().toUpperCase();
+            if(code.length!==4){alert('请输入4位房间号');return;}
+            roomCode=code;myMPId=Date.now()+'_'+Math.random().toString(36).slice(2,6);isRoomHost=false;
+            joinChannel();
+            document.getElementById('roomCodeDisplay').textContent=roomCode;
+            document.getElementById('roomLobby').style.display='block';
+            document.getElementById('startMPBtn').style.display='none';
+            updateRoomPlayerList();
+        }
+
+        function joinChannel(){
+            if(mpChannel){mpChannel.unsubscribe();mpChannel=null;}
+            mpChannel=sbClient.channel('room-'+roomCode,{config:{broadcast:{self:false},presence:{key:myMPId}}});
+            mpChannel.on('presence',{event:'sync'},()=>{updateRoomPlayerList();});
+            mpChannel.on('broadcast',{event:'state'},({payload})=>{handleRemoteState(payload);});
+            mpChannel.on('broadcast',{event:'resurrect'},({payload})=>{handleResurrection(payload);});
+            mpChannel.on('broadcast',{event:'game_start'},()=>{if(!isRoomHost){isMP=true;startGame(controlMode||'keyboard');}});
+            mpChannel.subscribe(async(status)=>{
+                if(status==='SUBSCRIBED'){
+                    let nickEl=document.getElementById('nickInput');
+                    let nick=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
+                    await mpChannel.track({id:myMPId,nick:nick,role:selectedRole,ready:true});
+                }
+            });
+        }
+
+        function updateRoomPlayerList(){
+            if(!mpChannel)return;
+            let state=mpChannel.presenceState();
+            let players=[];
+            for(let key in state){let arr=state[key];for(let p of arr){players.push(p);}}
+            let el=document.getElementById('roomPlayerList');
+            if(players.length===0){el.innerHTML='<div style="color:#666">等待玩家加入...</div>';return;}
+            let html=players.map((p,i)=>{
+                let color=MP_COLORS[i%MP_COLORS.length];
+                let isMe=p.id===myMPId;
+                return `<span style="color:${color};margin:0 8px">${isMe?'👤':'👥'} ${p.nick||'Player'}${isMe?' (你)':''}</span>`;
+            }).join('');
+            el.innerHTML=`<div style="margin-bottom:4px">${players.length}/4 玩家</div>${html}`;
+        }
+
+        function leaveRoom(){
+            if(mpChannel){mpChannel.untrack();mpChannel.unsubscribe();mpChannel=null;}
+            isMP=false;isRoomHost=false;roomCode='';otherPlayers={};
+            document.getElementById('roomLobby').style.display='none';
+        }
+
+        function startMPGame(){
+            if(!isRoomHost||!mpChannel)return;
+            isMP=true;
+            mpChannel.send({type:'broadcast',event:'game_start',payload:{}});
+            startGame(controlMode||'keyboard');
+        }
+
+        function broadcastMyState(){
+            if(!isMP||!mpChannel)return;
+            let now=Date.now();if(now-lastMPBroadcast<MP_SYNC_RATE)return;lastMPBroadcast=now;
+            let roleData=ROLES[selectedRole]||ROLES.dot;
+            mpChannel.send({type:'broadcast',event:'state',payload:{
+                id:myMPId,nick:playerNickname,role:selectedRole,
+                x:Math.round(player.x),y:Math.round(player.y),
+                hp:Math.floor(player.hp),maxHp:player.maxHp,
+                alive:gameState!==STATE_GAMEOVER,
+                ghostX:Math.round(player.x),ghostY:Math.round(player.y),
+                level:player.level,color:roleData.color,
+                isDashing:player.isDashing,invincible:player.invincibleTimer>0
+            }});
+        }
+
+        function handleRemoteState(data){
+            if(!data||data.id===myMPId)return;
+            // Count current players, reject if already 4
+            let count=Object.keys(otherPlayers).length+1;
+            if(!otherPlayers[data.id]&&count>=4)return;
+            otherPlayers[data.id]=data;
+            otherPlayers[data.id]._lastSeen=Date.now();
+        }
+
+        function cleanupDisconnected(){
+            let now=Date.now();
+            for(let id in otherPlayers){if(now-otherPlayers[id]._lastSeen>5000)delete otherPlayers[id];}
+        }
+
+        function tryResurrect(){
+            if(!isMP||!myCanResurrect||resCooldown>0||gameState===STATE_GAMEOVER)return;
+            for(let id in otherPlayers){
+                let op=otherPlayers[id];
+                if(!op.alive){
+                    let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
+                    if(dist<80){
+                        myCanResurrect=false;resCooldown=30;
+                        mpChannel.send({type:'broadcast',event:'resurrect',payload:{targetId:id,byId:myMPId,byNick:playerNickname}});
+                        addFloatingText('💫 复活了 '+op.nick+'!',player.x,player.y-50,'#44ff44');
+                        return;
+                    }
+                }
+            }
+            addFloatingText('附近没有可复活的队友',player.x,player.y-40,'#ff5555');
+        }
+
+        function handleResurrection(data){
+            if(data.targetId===myMPId&&gameState===STATE_GAMEOVER){
+                // I got resurrected!
+                gameState=STATE_PLAYING;
+                player.hp=Math.floor(player.maxHp*0.5);
+                player.invincibleTimer=3.0;
+                addFloatingText('💫 被 '+data.byNick+' 复活了!',player.x,player.y-50,'#44ff44');
+                screenShakeTimer=0.3;screenShakeIntensity=6;
+            }
+        }
+
+        function drawOtherPlayers(w2s){
+            for(let id in otherPlayers){
+                let op=otherPlayers[id];
+                let{x,y}=w2s(op.x,op.y);
+                // Only draw if on screen
+                if(x<-50||x>W+50||y<-50||y>H+50)continue;
+                ctx.shadowBlur=20;
+                if(op.alive){
+                    // Alive player
+                    ctx.shadowColor=op.color||'#ffffff';
+                    if(op.isDashing){ctx.fillStyle='#aaddff';}
+                    else if(op.invincible&&(Math.floor(Date.now()/200)%2===0)){ctx.fillStyle='#fffbe3';}
+                    else{ctx.fillStyle=op.color||'#f0f0ff';}
+                    ctx.beginPath();ctx.arc(x,y,PLAYER_RADIUS,0,Math.PI*2);ctx.fill();
+                    // Name tag
+                    ctx.shadowBlur=0;ctx.fillStyle='#ffffffcc';ctx.font='11px monospace';ctx.textAlign='center';
+                    ctx.fillText(op.nick||'Player',x,y-PLAYER_RADIUS-8);
+                    ctx.fillText('Lv'+op.level,x,y-PLAYER_RADIUS-20);
+                    // HP bar
+                    let bw=24,bh=3,bx=x-bw/2,by=y+PLAYER_RADIUS+4;
+                    ctx.fillStyle='#333';ctx.fillRect(bx,by,bw,bh);
+                    ctx.fillStyle=op.hp/op.maxHp>0.5?'#44ff44':'#ff4444';
+                    ctx.fillRect(bx,by,bw*(op.hp/op.maxHp),bh);
+                    ctx.textAlign='left';
+                }else{
+                    // Dead player ghost
+                    let{x:gx,y:gy}=w2s(op.ghostX,op.ghostY);
+                    let pulse=0.3+0.3*Math.sin(Date.now()/300);
+                    ctx.shadowColor='#8888ff';ctx.globalAlpha=pulse;
+                    ctx.beginPath();ctx.arc(gx,gy,PLAYER_RADIUS+4,0,Math.PI*2);
+                    ctx.fillStyle='rgba(136,136,255,0.3)';ctx.fill();
+                    ctx.strokeStyle='rgba(136,136,255,0.6)';ctx.lineWidth=2;ctx.stroke();
+                    ctx.globalAlpha=1;ctx.shadowBlur=0;
+                    ctx.fillStyle='#8888ff';ctx.font='16px monospace';ctx.textAlign='center';
+                    ctx.fillText('👻',gx,gy+5);
+                    ctx.font='11px monospace';ctx.fillStyle='#aaaaff';
+                    ctx.fillText(op.nick||'Player',gx,gy-22);
+                    // Resurrect hint if close enough
+                    let dist=Math.hypot(player.x-op.ghostX,player.y-op.ghostY);
+                    if(dist<100&&myCanResurrect&&resCooldown<=0&&gameState!==STATE_GAMEOVER){
+                        ctx.fillStyle='#44ff44';ctx.font='bold 13px monospace';
+                        ctx.fillText('按 R 复活',gx,gy+28);
+                    }
+                    ctx.textAlign='left';
+                }
+                ctx.shadowBlur=0;
+            }
+        }
+
+        function drawOtherPlayersOnMinimap(mmX,mmY,mmW,mmH,mmScale){
+            for(let id in otherPlayers){
+                let op=otherPlayers[id];
+                let px=op.alive?op.x:op.ghostX,py=op.alive?op.y:op.ghostY;
+                let mx=mmX+mmW/2+(px-player.x)*mmScale,my=mmY+mmH/2+(py-player.y)*mmScale;
+                if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){
+                    ctx.fillStyle=op.alive?(op.color||'#ffffff'):'#8888ff';
+                    ctx.beginPath();ctx.arc(mx,my,3,0,Math.PI*2);ctx.fill();
+                }
+            }
+        }
+
         function loadSettings(){try{let s=localStorage.getItem('rl_settings');if(s)gameSettings={...gameSettings,...JSON.parse(s)};}catch(e){}}
         function saveSettings(){localStorage.setItem('rl_settings',JSON.stringify(gameSettings));}
         loadSettings();
@@ -480,6 +700,8 @@
                 if(pos.x>W/2-40&&pos.x<W/2+40&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){triggerDash();return;}
                 // Skill button (right of dash)
                 if(pos.x>W/2+45&&pos.x<W/2+105&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){activateSkill();return;}
+                // Resurrect button (left of dash) - MP only
+                if(isMP&&pos.x>W/2-105&&pos.x<W/2-45&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){tryResurrect();return;}
                 if(pos.x<W/2&&!leftJoy.active){leftJoy.active=true;leftJoy.id=t.identifier;leftJoy.bx=pos.x;leftJoy.by=pos.y;leftJoy.kx=pos.x;leftJoy.ky=pos.y;}
                 else if(pos.x>=W/2&&!rightJoy.active){rightJoy.active=true;rightJoy.id=t.identifier;rightJoy.bx=pos.x;rightJoy.by=pos.y;rightJoy.kx=pos.x;rightJoy.ky=pos.y;}
             }
@@ -765,6 +987,8 @@
             // Apply mutators
             if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
+            myCanResurrect=true;resCooldown=0;
+            let resHint=document.getElementById('resHint');if(resHint)resHint.style.display=isMP?'':'none';
             updateUI();
         }
 
@@ -1670,6 +1894,8 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
             for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vx*=0.95;p.vy*=0.95;if(p.life<=0)particles.splice(i,1);}
             for(let[e,a]of dmgAccum){a.timer-=dt;if(a.timer<=0){let col=a.crits>0?'#ff4444':'#ffffff';let txt=Math.round(a.total).toString();if(a.crits>0)txt='💥'+txt;addFloatingText(txt,a.x,a.y-20,col);dmgAccum.delete(e);}}
             checkLevelUp();updateUI();if(Math.floor(gameTime*2)%6===0)checkAchievements();
+            // Multiplayer sync
+            if(isMP){broadcastMyState();if(resCooldown>0)resCooldown-=dt;cleanupDisconnected();}
         }
 
         // ---------- DRAW ----------
@@ -1794,6 +2020,9 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if((bs.frozen||0)>0){ctx.beginPath();ctx.arc(x,y,bs.radius+3,0,Math.PI*2);ctx.fillStyle='rgba(100,150,255,0.25)';ctx.fill();}
                 ctx.fillStyle="#fff";ctx.font="bold 14px monospace";ctx.textAlign="center";ctx.fillText(bt.name,x,y-bs.radius-20);
                 let bw=bs.radius*2.5,bh=6,bx=x-bw/2,by=y-bs.radius-14;ctx.fillStyle="#333";ctx.fillRect(bx,by,bw,bh);ctx.fillStyle=bt.color;ctx.fillRect(bx,by,bw*(bs.health/bs.maxHealth),bh);ctx.strokeStyle="#666";ctx.lineWidth=1;ctx.strokeRect(bx,by,bw,bh);ctx.textAlign="left";}
+
+            // Other multiplayer players
+            if(isMP){drawOtherPlayers(w2s);}
 
             // Player
             let roleData=ROLES[selectedRole]||ROLES.dot;
@@ -1953,6 +2182,19 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             // Weapon evolution indicator
             if(player.evolved&&player.evolvedWeapon){ctx.fillStyle='#ffd966';ctx.font='bold 13px monospace';ctx.fillText('\u2728 '+player.evolvedWeapon,20,140);}
 
+            // Multiplayer HUD
+            if(isMP){
+                let mpY=155;ctx.font='12px monospace';
+                ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(8,mpY-12,170,16+Object.keys(otherPlayers).length*16);
+                ctx.fillStyle='#88ddff';ctx.fillText('\u{1F465} Room: '+roomCode,14,mpY);mpY+=16;
+                for(let id in otherPlayers){let op=otherPlayers[id];
+                    ctx.fillStyle=op.alive?(op.color||'#fff'):'#666';
+                    ctx.fillText((op.alive?'\u2764\uFE0F':'\u{1F480}')+' '+op.nick+' Lv'+op.level+' '+(op.alive?Math.floor(op.hp)+'/'+op.maxHp:'DEAD'),14,mpY);mpY+=16;}
+                // Resurrect status
+                if(myCanResurrect){ctx.fillStyle=resCooldown>0?'#888':'#44ff44';ctx.fillText(resCooldown>0?'R: CD '+Math.ceil(resCooldown)+'s':'R: Ready',14,mpY);}
+                else{ctx.fillStyle='#666';ctx.fillText('R: Used',14,mpY);}
+            }
+
             // Minimap (top-right)
             if(gameSettings.minimap){
             const mmW=150,mmH=100,mmX=W-mmW-15,mmY=15,mmRange=800;
@@ -1967,6 +2209,8 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             for(let s of healingShrines){if(!s.active)continue;let mx=mmX+mmW/2+(s.x-player.x)*mmScale,my=mmY+mmH/2+(s.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#44ff44';ctx.fillRect(mx-2,my-2,4,4);}}
             for(let lp of lavaPools){let mx=mmX+mmW/2+(lp.x-player.x)*mmScale,my=mmY+mmH/2+(lp.y-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#ff6600';ctx.fillRect(mx-2,my-2,4,4);}}
             for(let p of speedPortals){for(let pi=0;pi<2;pi++){let px=pi===0?p.x1:p.x2,py=pi===0?p.y1:p.y2;let mx=mmX+mmW/2+(px-player.x)*mmScale,my=mmY+mmH/2+(py-player.y)*mmScale;if(mx>=mmX&&mx<=mmX+mmW&&my>=mmY&&my<=mmY+mmH){ctx.fillStyle='#4488ff';ctx.beginPath();ctx.arc(mx,my,3,0,Math.PI*2);ctx.fill();}}}
+            // Other players on minimap
+            if(isMP){drawOtherPlayersOnMinimap(mmX,mmY,mmW,mmH,mmScale);}
             // Player dot on minimap
             ctx.fillStyle='#ffffff';ctx.fillRect(mmX+mmW/2-2,mmY+mmH/2-2,4,4);
             }
@@ -1996,6 +2240,14 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                     else{ctx.fillStyle='rgba(255,200,100,0.4)';ctx.fill();}
                     ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sbX,sbY,sbR,0,Math.PI*2);ctx.stroke();
                     ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText(skRole.skillName,sbX,sbY+5);ctx.textAlign='left';
+                }
+                // Resurrect button (left of dash) - MP only
+                if(isMP){
+                    let rbX=W/2-75,rbY=H-50,rbR=28;ctx.beginPath();ctx.arc(rbX,rbY,rbR,0,Math.PI*2);
+                    if(!myCanResurrect||resCooldown>0){ctx.fillStyle='rgba(100,100,100,0.35)';ctx.fill();}
+                    else{ctx.fillStyle='rgba(100,255,100,0.4)';ctx.fill();}
+                    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(rbX,rbY,rbR,0,Math.PI*2);ctx.stroke();
+                    ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText('复活',rbX,rbY+5);ctx.textAlign='left';
                 }
                 // Joystick hints
                 if(!leftJoy.active){ctx.fillStyle='rgba(255,255,255,0.15)';ctx.font='16px monospace';ctx.fillText('移动',40,H-30);}
@@ -2031,6 +2283,8 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            // Broadcast state even when dead so ghost shows for others
+            if(isMP&&gameState===STATE_GAMEOVER){broadcastMyState();cleanupDisconnected();}
             updateAchievePopup(dt);
             // Decay screen shake even outside STATE_PLAYING (so death shake stops)
             if(gameState!==STATE_PLAYING&&screenShakeTimer>0)screenShakeTimer-=dt;
@@ -2047,6 +2301,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;e.preventDefault();}
                 else if(k===' '&&gameState===STATE_PLAYING){triggerDash();e.preventDefault();}
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
+                else if(k==='r'&&isMP&&gameState===STATE_PLAYING){tryResurrect();e.preventDefault();}
                 else if(gameState===STATE_RELIC){if(k==='1')applyRelic(0);if(k==='2')applyRelic(1);if(k==='3')applyRelic(2);e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
                 else if(gameState===STATE_UPGRADE){if(k==='1')applyUpgrade(0);if(k==='2')applyUpgrade(1);if(k==='3')applyUpgrade(2);e.preventDefault();}
@@ -2063,6 +2318,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             gameWrapper.style.display='none';startScreen.style.display='flex';
             document.body.classList.remove('touch-mode');
             if(gameLoop){cancelAnimationFrame(gameLoop);gameLoop=null;}
+            leaveRoom();
         }
 
         // Start screen
@@ -2077,6 +2333,10 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
         }
         document.getElementById('keyboardModeBtn').addEventListener('click',()=>startGame('keyboard'));
         document.getElementById('touchModeBtn').addEventListener('click',()=>startGame('touch'));
+        document.getElementById('createRoomBtn').addEventListener('click',createRoom);
+        document.getElementById('joinRoomBtn').addEventListener('click',joinRoom);
+        document.getElementById('leaveRoomBtn').addEventListener('click',leaveRoom);
+        document.getElementById('startMPBtn').addEventListener('click',startMPGame);
     })();</script>
 </body>
 </html>
