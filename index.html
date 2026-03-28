@@ -37,9 +37,9 @@
         .game-container { background:#1a1f2b; border-radius:28px; padding:20px; box-shadow:0 20px 30px rgba(0,0,0,0.7); }
         .canvas-wrapper { position:relative; width:100%; padding-top:60%; background:#10131f; border-radius:20px; overflow:hidden; border:2px solid #4e3b2e; }
         canvas { position:absolute; top:0;left:0; width:100%;height:100%; display:block; cursor:crosshair; touch-action:none; }
-        .info-panel { display:flex; flex-wrap:wrap; justify-content:space-between; margin-top:16px; color:#cbad8e; font-weight:bold; font-size:1.2rem; text-shadow:2px 2px 0 #2d241c; background:#262d3a; padding:12px 16px; border-radius:60px; border:2px solid #6b4f3a; gap:8px; }
+        .info-panel { display:flex; flex-wrap:wrap; justify-content:center; margin-top:16px; color:#cbad8e; font-weight:bold; font-size:clamp(0.75rem,1.5vw,1.2rem); text-shadow:2px 2px 0 #2d241c; background:#262d3a; padding:8px 12px; border-radius:60px; border:2px solid #6b4f3a; gap:6px 12px; }
         .info-item { display:flex; align-items:center; gap:4px; }
-        .badge { background:#3f2f23; padding:4px 12px; border-radius:40px; color:#fadf9e; border:1px solid #aa8b6e; min-width:80px; text-align:center; font-size:1rem; }
+        .badge { background:#3f2f23; padding:3px 8px; border-radius:40px; color:#fadf9e; border:1px solid #aa8b6e; min-width:50px; text-align:center; font-size:clamp(0.7rem,1.3vw,1rem); }
         button { background:#6d4f3a; border:none; color:#faeac6; font-weight:bold; font-size:1.1rem; padding:8px 16px; border-radius:50px; cursor:pointer; border-bottom:4px solid #3a2c1e; font-family:inherit; transition:0.08s linear; touch-action:manipulation; }
         button:active { border-bottom-width:2px; transform:translateY(2px); }
         .tips { color:#7e8a9a; margin-top:12px; padding-left:12px; font-size:0.85rem; line-height:1.4; display:flex; flex-wrap:wrap; gap:15px; }
@@ -515,9 +515,15 @@
             otherPlayers[data.id]._lastSeen=Date.now();
         }
 
+        let hostLastSeen=0;
         function cleanupDisconnected(){
             let now=Date.now();
             for(let id in otherPlayers){if(now-otherPlayers[id]._lastSeen>5000)delete otherPlayers[id];}
+            // Client: detect host disconnect (no entity sync in 4s)
+            if(isClientMP()&&gameState===STATE_PLAYING){
+                if(hostLastSeen===0)hostLastSeen=now;
+                if(now-hostLastSeen>4000){addFloatingText('\u26A0\uFE0F Host disconnected!',player.x,player.y-60,'#ff5555');}
+            }
         }
 
         // Resurrection channeling state
@@ -724,12 +730,17 @@
             mpChannel.send({type:'broadcast',event:'entities',payload:{e:eData,el:elData,b:bData,xp:xpData,ch:cData,kc:killCount,gt:Math.round(gameTime*10)/10}});
         }
 
+        let entityLerpT=0;
         function receiveEntities(data){
             if(!isClientMP())return;
-            // Replace local entity arrays with host data
-            enemies=data.e.map(e=>({eid:e.eid,x:e.x,y:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,type:e.t,isBoss:false,isElite:false,frozen:e.fr||0,attackTimer:0,shieldAngle:0,healTimer:0}));
-            elites=data.el.map(e=>{let afxObjs=(e.af||[]).map(aid=>ELITE_AFFIXES.find(a=>a.id===aid)).filter(Boolean);return{eid:e.eid,x:e.x,y:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,isElite:true,isBoss:false,affixes:afxObjs,affixShield:e.ash||0};});
-            bosses=data.b.map(b=>({eid:b.eid,x:b.x,y:b.y,radius:b.r,health:b.hp,maxHealth:b.mhp,isBoss:true,bossType:b.bt,frozen:b.fr||0,attackTimer:0,attackInterval:2,contactDamage:5,speed:30,chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:0,teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0}));
+            entityLerpT=0;hostLastSeen=Date.now();
+            // Merge with interpolation — store target positions, keep current as prev
+            let oldEnemies=new Map();for(let e of enemies)if(e.eid)oldEnemies.set(e.eid,{x:e.x,y:e.y});
+            let oldElites=new Map();for(let e of elites)if(e.eid)oldElites.set(e.eid,{x:e.x,y:e.y});
+            let oldBosses=new Map();for(let b of bosses)if(b.eid)oldBosses.set(b.eid,{x:b.x,y:b.y});
+            enemies=data.e.map(e=>{let prev=oldEnemies.get(e.eid);return{eid:e.eid,x:prev?prev.x:e.x,y:prev?prev.y:e.y,tx:e.x,ty:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,type:e.t,isBoss:false,isElite:false,frozen:e.fr||0,attackTimer:0,shieldAngle:0,healTimer:0};});
+            elites=data.el.map(e=>{let afxObjs=(e.af||[]).map(aid=>ELITE_AFFIXES.find(a=>a.id===aid)).filter(Boolean);let prev=oldElites.get(e.eid);return{eid:e.eid,x:prev?prev.x:e.x,y:prev?prev.y:e.y,tx:e.x,ty:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,isElite:true,isBoss:false,affixes:afxObjs,affixShield:e.ash||0};});
+            bosses=data.b.map(b=>{let prev=oldBosses.get(b.eid);return{eid:b.eid,x:prev?prev.x:b.x,y:prev?prev.y:b.y,tx:b.x,ty:b.y,radius:b.r,health:b.hp,maxHealth:b.mhp,isBoss:true,bossType:b.bt,frozen:b.fr||0,attackTimer:0,attackInterval:2,contactDamage:5,speed:30,chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:0,teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0};});
             xpOrbs=data.xp.map(o=>({x:o.x,y:o.y,radius:o.r,value:o.v}));
             chests=data.ch.map(c=>({x:c.x,y:c.y,radius:18,isOpen:c.op}));
             killCount=data.kc||killCount;
@@ -1157,7 +1168,9 @@
                 // Skill button (right of dash)
                 if(pos.x>W/2+45&&pos.x<W/2+105&&pos.y>H-80&&pos.y<H-20&&gameState===STATE_PLAYING){activateSkill();return;}
                 // Resurrection is automatic (stand in circle) - no button needed
-                if(pos.x<W/2&&!leftJoy.active){leftJoy.active=true;leftJoy.id=t.identifier;leftJoy.bx=pos.x;leftJoy.by=pos.y;leftJoy.kx=pos.x;leftJoy.ky=pos.y;}
+                // Dead zone: don't start joystick if touch is near center-bottom buttons
+                let inButtonZone=pos.y>H-90&&pos.x>W/2-120&&pos.x<W/2+120;
+                if(pos.x<W/2&&!leftJoy.active&&!inButtonZone){leftJoy.active=true;leftJoy.id=t.identifier;leftJoy.bx=pos.x;leftJoy.by=pos.y;leftJoy.kx=pos.x;leftJoy.ky=pos.y;}
                 else if(pos.x>=W/2&&!rightJoy.active){rightJoy.active=true;rightJoy.id=t.identifier;rightJoy.bx=pos.x;rightJoy.by=pos.y;rightJoy.kx=pos.x;rightJoy.ky=pos.y;}
             }
         }
@@ -1899,10 +1912,12 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                 if(lp.dmgTimer>=0.5){lp.dmgTimer=0;
                     // Damage player
                     if(Math.hypot(player.x-lp.x,player.y-lp.y)<player.radius+lp.radius){damagePlayer(1);}
-                    // Damage enemies
+                    // Damage enemies (host only — clients see synced state)
+                    if(!isClientMP()){
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-lp.x,e.y-lp.y)<e.radius+lp.radius){e.health-=1;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;}}}
                     for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-lp.x,e.y-lp.y)<e.radius+lp.radius){e.health-=1;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;}}}
                     for(let bs of bosses){if(Math.hypot(bs.x-lp.x,bs.y-lp.y)<bs.radius+lp.radius){bs.health-=1;}}
+                    }
                 }}
             // Speed portals
             for(let i=speedPortals.length-1;i>=0;i--){let p=speedPortals[i];p.life-=dt;if(p.cooldown>0)p.cooldown-=dt;
@@ -1933,20 +1948,33 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             // Environmental events
             spawnEnvironmentalEvents(dt,nowS);updateEnvironmentalEvents(dt);
             // Blood Pact relic: lose 1 HP every 15 seconds
-            if(hasRelic('bloodPact')){player.bloodPactTimer=(player.bloodPactTimer||0)+dt;if(player.bloodPactTimer>=15){player.bloodPactTimer=0;player.hp-=1;if(player.hp<=0){player.hp=1;}}}
+            if(hasRelic('bloodPact')){player.bloodPactTimer=(player.bloodPactTimer||0)+dt;if(player.bloodPactTimer>=15){player.bloodPactTimer=0;if(player.hp>2)player.hp-=1;}}
             // Blade Storm evolution: passive aura damage
             if(player.evolved&&player.evolvedWeapon==='Blade Storm'){bladeStormTimer+=dt;if(bladeStormTimer>=0.5){bladeStormTimer=0;
                 let auraDmg=player.damage*0.8;
+                if(isClientMP()){
+                    for(let e of enemies){if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius)sendDamageToHost(e.eid,auraDmg,false,false,false);}
+                    for(let e of elites){if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius)sendDamageToHost(e.eid,auraDmg,false,true,false);}
+                    for(let bs of bosses){if(Math.hypot(bs.x-player.x,bs.y-player.y)<120+bs.radius)sendDamageToHost(bs.eid,auraDmg,false,false,true);}
+                }else{
                 for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius){e.health-=auraDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-player.x,e.y-player.y)<120+e.radius){e.health-=auraDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                 for(let bs of bosses){if(Math.hypot(bs.x-player.x,bs.y-player.y)<120+bs.radius){bs.health-=auraDmg;}}
+                }
             }}
             // Blade Vortex evolution: orbiting daggers
             if(player.evolved&&player.evolvedWeapon==='Blade Vortex'){
                 for(let od of orbitingDaggers){od.angle+=3*dt;let ox=player.x+Math.cos(od.angle)*od.dist,oy=player.y+Math.sin(od.angle)*od.dist;
-                    for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=od.dmg*dt*3;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
-                    for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=od.dmg*dt*3;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
-                    for(let bs of bosses){if(Math.hypot(bs.x-ox,bs.y-oy)<bs.radius+8){bs.health-=od.dmg*dt*3;}}
+                    let vDmg=od.dmg*dt*3;
+                    if(isClientMP()){
+                        for(let e of enemies){if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8)sendDamageToHost(e.eid,vDmg,false,false,false);}
+                        for(let e of elites){if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8)sendDamageToHost(e.eid,vDmg,false,true,false);}
+                        for(let bs of bosses){if(Math.hypot(bs.x-ox,bs.y-oy)<bs.radius+8)sendDamageToHost(bs.eid,vDmg,false,false,true);}
+                    }else{
+                    for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=vDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-ox,e.y-oy)<e.radius+8){e.health-=vDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let bs of bosses){if(Math.hypot(bs.x-ox,bs.y-oy)<bs.radius+8){bs.health-=vDmg;}}
+                    }
                 }}
             // Regen
             if(player.regen>0)player.hp=Math.min(player.maxHp,player.hp+player.regen*dt);
@@ -2197,8 +2225,9 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
         boss.teleportCooldown-=dt;
         if(boss.teleportCooldown<=0){boss.teleportCooldown=3;let ta=Math.random()*Math.PI*2,td=200+Math.random()*100;boss.x=player.x+Math.cos(ta)*td;boss.y=player.y+Math.sin(ta)*td;}
         if(dist>0.01){let mv=boss.speed*dt;boss.x+=(dx/dist)*mv;boss.y+=(dy/dist)*mv;}
-        // Damaging aura
-        if(dist<120+boss.radius)tryDodgeOrDamage(Math.floor(1*sd));
+        // Damaging aura (tick every 0.5s, not every frame)
+        boss.auraTick=(boss.auraTick||0)+dt;
+        if(dist<120+boss.radius&&boss.auraTick>=0.5){boss.auraTick=0;tryDodgeOrDamage(Math.floor(2*sd));}
         boss.attackTimer+=dt;
         if(boss.attackTimer>=boss.attackInterval*getBossCDMult()*0.5){boss.attackTimer=0;
             let ba=Math.atan2(dy,dx);
@@ -2221,9 +2250,15 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             for(let i=playerZones.length-1;i>=0;i--){
                 let z=playerZones[i];z.timer+=dt;z.lastTick+=dt;
                 if(z.lastTick>=z.tickInterval){z.lastTick=0;
+                    if(isClientMP()){
+                        for(let e of enemies){if(Math.hypot(e.x-z.x,e.y-z.y)<z.radius+e.radius)sendDamageToHost(e.eid,z.damage,false,false,false);}
+                        for(let e of elites){if(Math.hypot(e.x-z.x,e.y-z.y)<z.radius+e.radius)sendDamageToHost(e.eid,z.damage,false,true,false);}
+                        for(let bs of bosses){if(Math.hypot(bs.x-z.x,bs.y-z.y)<z.radius+bs.radius)sendDamageToHost(bs.eid,z.damage,false,false,true);}
+                    }else{
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-z.x,e.y-z.y)<z.radius+e.radius){e.health-=z.damage;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;}}}
                     for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-z.x,e.y-z.y)<z.radius+e.radius){e.health-=z.damage;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;}}}
                     for(let bs of bosses){if(Math.hypot(bs.x-z.x,bs.y-z.y)<z.radius+bs.radius)bs.health-=z.damage;}
+                    }
                 }
                 if(z.timer>=z.duration)playerZones.splice(i,1);
             }
@@ -2858,6 +2893,13 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            // Client entity interpolation — smoothly lerp toward target positions
+            if(isClientMP()){
+                entityLerpT=Math.min(1,entityLerpT+dt/(ENTITY_SYNC_RATE/1000));
+                for(let e of enemies){if(e.tx!==undefined){e.x+=(e.tx-e.x)*Math.min(1,dt*12);e.y+=(e.ty-e.y)*Math.min(1,dt*12);}}
+                for(let e of elites){if(e.tx!==undefined){e.x+=(e.tx-e.x)*Math.min(1,dt*12);e.y+=(e.ty-e.y)*Math.min(1,dt*12);}}
+                for(let b of bosses){if(b.tx!==undefined){b.x+=(b.tx-b.x)*Math.min(1,dt*10);b.y+=(b.ty-b.y)*Math.min(1,dt*10);}}
+            }
             // Host keeps enemies running when dead/shopping — but NOT during upgrade (game pauses for upgrade)
             if(isHostMP()&&gameState!==STATE_PLAYING&&gameState!==STATE_PAUSED&&gameState!==STATE_UPGRADE){updateHostEntities(dt,now/1000);}
             // MP upgrade sync countdown
