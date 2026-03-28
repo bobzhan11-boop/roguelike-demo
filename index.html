@@ -287,6 +287,10 @@
             mpChannel.on('broadcast',{event:'state'},({payload})=>{if(payload&&payload.id!==myMPId)handleRemoteState(payload);});
             mpChannel.on('broadcast',{event:'entities'},({payload})=>{if(payload)receiveEntities(payload);});
             mpChannel.on('broadcast',{event:'remote_damage'},({payload})=>{if(payload)processRemoteDamage(payload);});
+            mpChannel.on('broadcast',{event:'mp_levelup'},({payload})=>{if(payload)handleMPLevelUp(payload);});
+            mpChannel.on('broadcast',{event:'mp_upgrade_pick'},({payload})=>{if(payload)handleUpgradePick(payload);});
+            mpChannel.on('broadcast',{event:'mp_upgrade_done'},({payload})=>{if(payload)handleUpgradeDone(payload);});
+            mpChannel.on('broadcast',{event:'mp_shared_xp'},({payload})=>{if(payload&&isHostMP()){mpSharedExp+=(payload.v||0);mpCheckLevelUp();}});
             mpChannel.on('broadcast',{event:'shared_xp'},({payload})=>{if(payload&&payload.id!==myMPId&&gameState===STATE_PLAYING){player.exp+=payload.value;}});
             mpChannel.on('broadcast',{event:'resurrect'},({payload})=>{handleResurrection(payload);});
             mpChannel.on('broadcast',{event:'game_start'},({payload})=>{
@@ -442,6 +446,134 @@
         }
 
         function getResChannelDodgeBonus(){return 0;}
+
+        // Host keeps running enemy AI even when not in STATE_PLAYING
+        function updateHostEntities(dt,nowS){
+            if(!isHostMP())return;
+            gameTime+=dt;difficultyTimer+=dt;
+            if(gameMode!=='bossRush')spawnEnemy(nowS);
+            spawnChest(nowS);
+            if(gameMode!=='bossRush')spawnElite(nowS);
+            if(gameMode==='bossRush'){if(gameTime-lastBossSpawnTime>=55&&bossCountdown<=0){bossCountdown=BOSS_COUNTDOWN_TIME;}}
+            else{checkBossCountdown(nowS);}
+            if(bossCountdown>0){bossCountdown-=dt;if(bossCountdown<=0){bossCountdown=0;spawnBoss(nowS);}}
+            // Enemy movement
+            for(let e of enemies){
+                if((e.frozen||0)>0){e.frozen-=dt;continue;}
+                let tgt=getNearestPlayerPos(e.x,e.y);
+                let dx=tgt.x-e.x,dy=tgt.y-e.y,dist=Math.hypot(dx,dy);
+                if(dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
+            }
+            for(let e of elites){if((e.frozen||0)>0){e.frozen-=dt;continue;}let tgt=getNearestPlayerPos(e.x,e.y);let dx=tgt.x-e.x,dy=tgt.y-e.y,d=Math.hypot(dx,dy);if(d>0.01){let mv=e.speed*dt;e.x+=(dx/d)*mv;e.y+=(dy/d)*mv;}}
+            // Simplified boss movement (just chase)
+            for(let boss of bosses){if((boss.frozen||0)>0){boss.frozen-=dt;continue;}let tgt=getNearestPlayerPos(boss.x,boss.y);let dx=tgt.x-boss.x,dy=tgt.y-boss.y,d=Math.hypot(dx,dy);if(d>60){let mv=boss.speed*dt;boss.x+=(dx/d)*mv;boss.y+=(dy/d)*mv;}}
+            // Floating texts + particles decay
+            for(let i=floatingTexts.length-1;i>=0;i--){floatingTexts[i].life-=dt;if(floatingTexts[i].life<=0)floatingTexts.splice(i,1);}
+            for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vx*=0.95;p.vy*=0.95;if(p.life<=0)particles.splice(i,1);}
+            broadcastEntities();
+            updateUI();
+        }
+
+        // ====== SHARED LEVEL & SYNC UPGRADE ======
+        let mpSharedExp=0, mpSharedLevel=1, mpSharedNextExp=100;
+        let mpUpgradeChoices={}; // {playerId: choiceIndex}
+        let mpUpgradeOptions=[]; // the 3 options for current level up
+        let mpUpgradeTimer=0; // 30s countdown
+        let mpWaitingForUpgrade=false; // true when waiting for others
+        let myUpgradeChosen=false;
+        const MP_UPGRADE_TIMEOUT=30;
+
+        function mpCheckLevelUp(){
+            if(!isHostMP())return;
+            if(mpSharedExp>=mpSharedNextExp&&gameState===STATE_PLAYING){
+                // Trigger level up for all players
+                mpSharedLevel++;mpSharedExp-=mpSharedNextExp;
+                mpSharedNextExp=Math.floor(100+mpSharedLevel*70);
+                let opts=generateUpgradeOptions();
+                mpUpgradeOptions=opts;mpUpgradeChoices={};mpUpgradeTimer=MP_UPGRADE_TIMEOUT;
+                mpWaitingForUpgrade=true;myUpgradeChosen=false;
+                gameState=STATE_UPGRADE;upgradeOptions=opts;
+                player.level=mpSharedLevel;player.nextExp=mpSharedNextExp;player.exp=mpSharedExp;
+                // Broadcast to clients
+                mpChannel.send({type:'broadcast',event:'mp_levelup',payload:{
+                    level:mpSharedLevel,exp:mpSharedExp,nextExp:mpSharedNextExp,
+                    opts:opts.map(o=>o.name)
+                }});
+            }
+        }
+
+        function handleMPLevelUp(data){
+            if(isHostMP())return;
+            mpSharedLevel=data.level;mpSharedExp=data.exp;mpSharedNextExp=data.nextExp;
+            player.level=data.level;player.exp=data.exp;player.nextExp=data.nextExp;
+            // Rebuild options from names (match against pool)
+            upgradeOptions=generateUpgradeOptions();
+            // Override with host's option names for consistency
+            mpUpgradeOptions=upgradeOptions;mpUpgradeChoices={};
+            mpUpgradeTimer=MP_UPGRADE_TIMEOUT;mpWaitingForUpgrade=true;myUpgradeChosen=false;
+            if(gameState===STATE_PLAYING||gameState===STATE_GAMEOVER){
+                gameState=STATE_UPGRADE;
+            }
+        }
+
+        function mpSendUpgradeChoice(index){
+            if(!isMP||!mpChannel)return;
+            myUpgradeChosen=true;
+            mpChannel.send({type:'broadcast',event:'mp_upgrade_pick',payload:{pid:myMPId,choice:index}});
+            if(isHostMP()){mpUpgradeChoices[myMPId]=index;checkAllUpgradesPicked();}
+        }
+
+        function handleUpgradePick(data){
+            if(!isHostMP())return;
+            mpUpgradeChoices[data.pid]=data.choice;
+            checkAllUpgradesPicked();
+        }
+
+        function checkAllUpgradesPicked(){
+            if(!isHostMP())return;
+            // Check if all alive players have picked
+            let allPicked=true;
+            if(!mpUpgradeChoices[myMPId]&&mpUpgradeChoices[myMPId]!==0)allPicked=false;
+            for(let id in otherPlayers){
+                if(otherPlayers[id].alive&&!mpUpgradeChoices[id]&&mpUpgradeChoices[id]!==0)allPicked=false;
+            }
+            if(allPicked){finishUpgrade();}
+        }
+
+        function autoPickUpgrade(){
+            if(!myUpgradeChosen&&upgradeOptions.length>0){
+                let pick=Math.floor(Math.random()*upgradeOptions.length);
+                if(isMP){mpSendUpgradeChoice(pick);}
+                applyUpgrade(pick);
+            }
+            // Force finish if host
+            if(isHostMP()){finishUpgrade();}
+        }
+
+        function finishUpgrade(){
+            mpWaitingForUpgrade=false;
+            // Host applies its own upgrade if not yet
+            if(!myUpgradeChosen&&upgradeOptions.length>0){
+                applyUpgrade(Math.floor(Math.random()*upgradeOptions.length));
+            }
+            // Tell everyone to resume
+            mpChannel.send({type:'broadcast',event:'mp_upgrade_done',payload:{level:mpSharedLevel}});
+            if(gameState===STATE_UPGRADE){gameState=STATE_PLAYING;}
+            myUpgradeChosen=false;
+        }
+
+        function handleUpgradeDone(data){
+            if(isHostMP())return;
+            mpWaitingForUpgrade=false;myUpgradeChosen=false;
+            player.level=data.level||mpSharedLevel;
+            if(gameState===STATE_UPGRADE){
+                // Apply own upgrade if chosen, or auto-pick
+                if(!myUpgradeChosen&&upgradeOptions.length>0){
+                    applyUpgrade(Math.floor(Math.random()*upgradeOptions.length));
+                }
+                gameState=mpIsDead?STATE_GAMEOVER:STATE_PLAYING;
+            }
+        }
 
         // ====== SHARED ENEMIES SYSTEM ======
         function isHostMP(){return isMP&&isRoomHost;}
@@ -1181,6 +1313,7 @@
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
             myCanResurrect=true;resCooldown=0;resChanneling=false;resChannelTarget=null;resChannelProgress=0;
             mpGhostX=0;mpGhostY=0;mpIsDead=false;
+            mpSharedExp=0;mpSharedLevel=1;mpSharedNextExp=100;mpUpgradeChoices={};mpUpgradeOptions=[];mpUpgradeTimer=0;mpWaitingForUpgrade=false;myUpgradeChosen=false;mpEntityIdCounter=0;
             let resHint=document.getElementById('resHint');if(resHint)resHint.style.display=isMP?'':'none';
             updateUI();
         }
@@ -1468,14 +1601,26 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             return[...pool].sort(()=>Math.random()-0.5).slice(0,3);
         }
         function applyUpgrade(i){runStats.upgradesTaken++;
-            if(i<0||i>=upgradeOptions.length)return;const old=player.nextExp;upgradeOptions[i].apply(player);
-            player.damage*=1.03; // +3% damage per level
-            player.level++;player.exp-=old;player.nextExp=Math.floor(BASE_EXP_NEXT+player.level*EXP_INCREASE_PER_LEVEL);upgradeOptions=[];
-            // Check weapon evolution
-            checkWeaponEvolution();
-            if(player.exp>=player.nextExp){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}else gameState=STATE_PLAYING;updateUI();
+            if(i<0||i>=upgradeOptions.length)return;upgradeOptions[i].apply(player);
+            player.damage*=1.03;
+            if(isMP){
+                // In MP: send choice, wait for others
+                mpSendUpgradeChoice(i);
+                myUpgradeChosen=true;
+                player.level=mpSharedLevel;player.exp=mpSharedExp;player.nextExp=mpSharedNextExp;
+                // Don't change gameState — wait for mp_upgrade_done
+            }else{
+                const old=player.nextExp;
+                player.level++;player.exp-=old;player.nextExp=Math.floor(BASE_EXP_NEXT+player.level*EXP_INCREASE_PER_LEVEL);
+            }
+            upgradeOptions=[];checkWeaponEvolution();
+            if(!isMP){if(player.exp>=player.nextExp){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}else gameState=STATE_PLAYING;}
+            updateUI();
         }
-        function checkLevelUp(){if(player.exp>=player.nextExp&&gameState===STATE_PLAYING){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}}
+        function checkLevelUp(){
+            if(isMP)return; // MP uses mpCheckLevelUp on host
+            if(player.exp>=player.nextExp&&gameState===STATE_PLAYING){gameState=STATE_UPGRADE;upgradeOptions=generateUpgradeOptions();}
+        }
 
         // Shop
         function shopPrice(base){return Math.floor(base*(1+Math.floor(player.level/3)*0.4));}
@@ -2064,9 +2209,12 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                 if(d<player.radius+o.radius){
                     let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
                     if(hasRelic('xpFeast'))mult*=1.3;
-                    player.exp+=o.value*mult;xpOrbs.splice(i,1);
-                    // Share XP with teammates (85%)
-                    if(isMP&&mpChannel){mpChannel.send({type:'broadcast',event:'shared_xp',payload:{id:myMPId,value:Math.floor(o.value*mult*0.85)}});}
+                    let xpVal=Math.floor(o.value*mult);xpOrbs.splice(i,1);
+                    if(isMP){
+                        // Shared level: send XP to host pool
+                        if(isHostMP()){mpSharedExp+=xpVal;player.exp=mpSharedExp;mpCheckLevelUp();}
+                        else{mpChannel.send({type:'broadcast',event:'mp_shared_xp',payload:{v:xpVal}});}
+                    }else{player.exp+=xpVal;}
                 }else if(o.vacuumed){let spd=600*dt;o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;
                 }else if(effMagnet>0&&d<effMagnet){let spd=250*dt*(1+effMagnet/(d+1));o.x+=(dx/d)*spd;o.y+=(dy/d)*spd;}
             }
@@ -2309,14 +2457,30 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
 
             const pnX=200,pnY=150,pnW=600,pnH=320;
             // Upgrade screen
-            if(gameState===STATE_UPGRADE&&upgradeOptions.length===3){
+            if(gameState===STATE_UPGRADE&&upgradeOptions.length===3&&!myUpgradeChosen){
                 ctx.fillStyle="#0f172ad9";ctx.shadowBlur=0;ctx.fillRect(pnX,pnY,pnW,pnH);ctx.strokeStyle="#c79a6e";ctx.lineWidth=6;ctx.strokeRect(pnX,pnY,pnW,pnH);
-                ctx.font="bold 34px 'Courier New'";ctx.fillStyle="#f7e3b2";ctx.fillText("⚡ 升级选择",pnX+160,pnY+70);
+                ctx.font="bold 34px 'Courier New'";ctx.fillStyle="#f7e3b2";ctx.fillText("\u26A1 升级选择 Lv"+(isMP?mpSharedLevel:player.level),pnX+120,pnY+70);
+                if(isMP){ctx.font="16px monospace";ctx.fillStyle="#ff8844";ctx.fillText("\u23F1 "+Math.ceil(mpUpgradeTimer)+"s",pnX+500,pnY+70);}
                 ctx.font="26px 'Courier New'";ctx.textBaseline="middle";
                 ctx.textAlign="right";for(let i=0;i<3;i++){ctx.fillStyle="#c7b087";ctx.fillText(`[${i+1}]`,pnX+90,pnY+130+i*60);}
                 ctx.textAlign="left";for(let i=0;i<3;i++){ctx.fillStyle="#f0dbb4";ctx.fillText(upgradeOptions[i].name,pnX+110,pnY+130+i*60);}
                 ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.font="18px monospace";ctx.fillStyle="#b5c9b0";
                 ctx.fillText(controlMode==='touch'?"点击选项进行选择":"按数字键 1/2/3 选择",pnX+110,pnY+300);
+            }
+            // MP waiting for others after choosing upgrade
+            if(gameState===STATE_UPGRADE&&myUpgradeChosen&&isMP){
+                ctx.fillStyle="#0f172ad9";ctx.shadowBlur=0;ctx.fillRect(pnX,pnY,pnW,200);ctx.strokeStyle="#c79a6e";ctx.lineWidth=6;ctx.strokeRect(pnX,pnY,pnW,200);
+                ctx.font="bold 28px 'Courier New'";ctx.fillStyle="#f7e3b2";ctx.textAlign="center";
+                ctx.fillText("\u2705 已选择, 等待队友...",pnX+pnW/2,pnY+70);
+                ctx.font="20px monospace";ctx.fillStyle="#ff8844";
+                ctx.fillText("\u23F1 "+Math.ceil(mpUpgradeTimer)+"s",pnX+pnW/2,pnY+120);
+                // Show who has/hasn't picked
+                let wy=pnY+150;ctx.font="14px monospace";
+                for(let oid in otherPlayers){let op=otherPlayers[oid];if(!op.alive)continue;
+                    let picked=mpUpgradeChoices[oid]!==undefined;
+                    ctx.fillStyle=picked?'#44ff44':'#ffaa44';
+                    ctx.fillText((picked?'\u2705':'\u23F3')+' '+op.nick,pnX+pnW/2,wy);wy+=18;}
+                ctx.textAlign="left";
             }
             // Skill upgrade screen
             if(gameState===STATE_SKILL_UP&&skillUpOptions.length===3){
@@ -2526,6 +2690,10 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
+            // Host keeps enemies running even when dead/upgrading/shopping
+            if(isHostMP()&&gameState!==STATE_PLAYING&&gameState!==STATE_PAUSED){updateHostEntities(dt,now/1000);}
+            // MP upgrade sync countdown
+            if(isMP&&mpWaitingForUpgrade){mpUpgradeTimer-=dt;if(mpUpgradeTimer<=0){autoPickUpgrade();}}
             // MP ghost mode: move ghost, eat orbs, broadcast state
             if(isMP&&gameState===STATE_GAMEOVER&&mpIsDead){
                 broadcastMyState();cleanupDisconnected();
