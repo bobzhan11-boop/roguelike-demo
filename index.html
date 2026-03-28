@@ -128,7 +128,15 @@
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
         </div>
-        <!-- Multiplayer room UI moved to front page -->
+        <!-- MP Ready panel (shown only in multiplayer) -->
+        <div id="mpReadyPanel" style="display:none;margin-top:12px;width:100%;max-width:500px;background:#1a1f2b;border:2px solid #6b4f3a;border-radius:12px;padding:12px;text-align:center">
+            <div style="color:#ffd966;font-size:1.1rem;margin-bottom:8px">👥 房间: <span id="mpReadyRoomCode"></span></div>
+            <div id="mpReadyPlayerList" style="color:#cbad8e;font-size:0.9rem;margin-bottom:10px"></div>
+            <button class="mode-btn" id="mpReadyBtn" style="min-width:160px;background:#3a5a3a;border-bottom-color:#1a3a1a">✅ 准备好了<small>Ready</small></button>
+            <div id="mpHostStartPanel" style="display:none;margin-top:8px">
+                <button class="mode-btn" id="mpHostStartBtn" style="min-width:200px;background:#5a5a3a;border-bottom-color:#3a3a1a;opacity:0.5" disabled>⏳ 等待所有人准备...</button>
+            </div>
+        </div>
     </div>
     <div id="achievePopup"><span id="achieveText"></span></div>
     <div id="rotateOverlay"><div class="rotate-icon">📱🔄</div><div>请横屏使用<br>Please rotate to landscape</div></div>
@@ -233,7 +241,9 @@
         const MP_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12emJuaGFiaXNvc3dpaGJxaWZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1OTc0MDgsImV4cCI6MjA5MDE3MzQwOH0.4ze5U_R-w8ZnvwSO-Uum6ej8k9CY6Iw5avxs8L3sq3E';
         let sbClient=null;
         let lastMPBroadcast=0;
-        const MP_SYNC_RATE=100; // ms between state broadcasts
+        const MP_SYNC_RATE=100;
+        let mpReadyPlayers={}; // {id: true/false}
+        let myReady=false;
 
         function initSBClient(){
             if(sbClient)return true;
@@ -266,19 +276,20 @@
 
         function joinRoom(){
             if(!initSBClient())return;
-            // Check both input sources
             let fpInput=document.getElementById('fpJoinInput');
-            let oldInput=document.getElementById('joinCodeInput');
-            let code=(fpInput&&fpInput.value.trim()?fpInput.value:oldInput?oldInput.value:'').trim().toUpperCase();
+            let code=(fpInput&&fpInput.value.trim()?fpInput.value:'').trim().toUpperCase();
             if(code.length<3||code.length>6){alert('请输入房间号 (3-6位)');return;}
             if(mpChannel){try{mpChannel.send({type:'broadcast',event:'leave_room',payload:{id:myMPId}});}catch(e){}}
             if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
             lobbyPlayers={};
             roomCode=code;myMPId=Date.now()+'_'+Math.random().toString(36).slice(2,6);isRoomHost=false;
             joinChannel();
-            document.getElementById('roomCodeDisplay').textContent=roomCode;
-            document.getElementById('roomLobby').style.display='block';
-            document.getElementById('startMPBtn').style.display='none';
+            // Show lobby on front page
+            let rc=document.getElementById('fpRoomCode');if(rc)rc.textContent=roomCode;
+            let fl=document.getElementById('fpLobby');if(fl)fl.style.display='block';
+            let pl=document.getElementById('fpPlayerList');if(pl)pl.innerHTML='<div style="color:#aaa">连接中...</div>';
+            // Hide start button for non-host
+            let sb=document.getElementById('fpStartBtn');if(sb)sb.style.display='none';
             document.getElementById('roomPlayerList').innerHTML='<div style="color:#aaa">连接中...</div>';
         }
 
@@ -316,7 +327,11 @@
                     console.log('[MP] Go to character select');
                     document.getElementById('frontPage').style.display='none';
                     document.getElementById('startScreen').style.display='flex';
+                    showMPReadyPanel();
                 }
+            });
+            mpChannel.on('broadcast',{event:'mp_ready'},({payload})=>{
+                if(payload){mpReadyPlayers[payload.id]=payload.ready;updateMPReadyList();}
             });
             mpChannel.on('broadcast',{event:'game_start'},({payload})=>{
                 if(!isRoomHost){
@@ -389,6 +404,46 @@
             isMP=false;isRoomHost=false;roomCode='';otherPlayers={};lobbyPlayers={};
             let rl=document.getElementById('roomLobby');if(rl)rl.style.display='none';
             let fl=document.getElementById('fpLobby');if(fl)fl.style.display='none';
+        }
+
+        function showMPReadyPanel(){
+            let panel=document.getElementById('mpReadyPanel');if(panel)panel.style.display='block';
+            let rc=document.getElementById('mpReadyRoomCode');if(rc)rc.textContent=roomCode;
+            let hsp=document.getElementById('mpHostStartPanel');if(hsp)hsp.style.display=isRoomHost?'block':'none';
+            myReady=false;mpReadyPlayers={};
+            let btn=document.getElementById('mpReadyBtn');if(btn){btn.textContent='✅ 准备好了';btn.style.background='#3a5a3a';}
+            updateMPReadyList();
+        }
+
+        function updateMPReadyList(){
+            let el=document.getElementById('mpReadyPlayerList');if(!el)return;
+            let ids=Object.keys(lobbyPlayers);
+            if(ids.length===0){el.innerHTML='<div style="color:#aaa">等待玩家...</div>';return;}
+            let html=ids.map((id,i)=>{
+                let p=lobbyPlayers[id];let color=MP_COLORS[i%MP_COLORS.length];
+                let isMe=id===myMPId;let ready=isMe?myReady:mpReadyPlayers[id];
+                return `<div style="color:${color};margin:3px 0">${ready?'✅':'⏳'} ${p.nick||'Player'}${isMe?' (你)':''} - ${ROLES[p.role]?ROLES[p.role].name:'白点'} ${ready?'<span style="color:#44ff44">已准备</span>':'<span style="color:#888">未准备</span>'}</div>`;
+            }).join('');
+            el.innerHTML=html;
+            // Check if all ready for host
+            if(isRoomHost){
+                let allReady=myReady;
+                for(let id of ids){if(id!==myMPId&&!mpReadyPlayers[id])allReady=false;}
+                let hsb=document.getElementById('mpHostStartBtn');
+                if(hsb){
+                    if(allReady&&ids.length>=2){hsb.disabled=false;hsb.style.opacity='1';hsb.textContent='▶️ 全员就绪 - 开始游戏!';}
+                    else{hsb.disabled=true;hsb.style.opacity='0.5';hsb.textContent='⏳ 等待所有人准备...';}
+                }
+            }
+        }
+
+        function toggleReady(){
+            myReady=!myReady;
+            let btn=document.getElementById('mpReadyBtn');
+            if(btn){btn.textContent=myReady?'❌ 取消准备':'✅ 准备好了';btn.style.background=myReady?'#5a3a3a':'#3a5a3a';}
+            if(mpChannel)mpChannel.send({type:'broadcast',event:'mp_ready',payload:{id:myMPId,ready:myReady}});
+            mpReadyPlayers[myMPId]=myReady;
+            updateMPReadyList();
         }
 
         function startMPGame(){
@@ -2874,11 +2929,16 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             document.getElementById('fpLobby').style.display='none';
         });
         document.getElementById('fpStartBtn').addEventListener('click',()=>{
-            // Host tells everyone to go to character select
             if(mpChannel){mpChannel.send({type:'broadcast',event:'go_to_select',payload:{}});}
-            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
             document.getElementById('frontPage').style.display='none';
             document.getElementById('startScreen').style.display='flex';
+            showMPReadyPanel();
+        });
+        document.getElementById('mpReadyBtn').addEventListener('click',toggleReady);
+        document.getElementById('mpHostStartBtn').addEventListener('click',()=>{
+            // Host starts game — auto-detect mode
+            let isMobile='ontouchstart' in window||navigator.maxTouchPoints>0;
+            startGame(isMobile?'touch':'keyboard');
         });
     })();</script>
 </body>
