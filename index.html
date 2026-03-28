@@ -2690,8 +2690,8 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(stateInputCooldown>0)stateInputCooldown-=dt;
             if(hitPause>0){hitPause-=dt;}
             else if(gameState!==STATE_PAUSED&&!showTouchTutorial)updateGame(dt,now/1000);
-            // Host keeps enemies running even when dead/upgrading/shopping
-            if(isHostMP()&&gameState!==STATE_PLAYING&&gameState!==STATE_PAUSED){updateHostEntities(dt,now/1000);}
+            // Host keeps enemies running when dead/shopping — but NOT during upgrade (game pauses for upgrade)
+            if(isHostMP()&&gameState!==STATE_PLAYING&&gameState!==STATE_PAUSED&&gameState!==STATE_UPGRADE){updateHostEntities(dt,now/1000);}
             // MP upgrade sync countdown
             if(isMP&&mpWaitingForUpgrade){mpUpgradeTimer-=dt;if(mpUpgradeTimer<=0){autoPickUpgrade();}}
             // MP ghost mode: move ghost, eat orbs, broadcast state
