@@ -245,8 +245,9 @@
         let sbClient=null;
         let lastMPBroadcast=0;
         const MP_SYNC_RATE=100;
-        let mpReadyPlayers={}; // {id: true/false}
+        let mpReadyPlayers={};
         let myReady=false;
+        let mpRoomPhase='lobby'; // 'lobby', 'select', 'playing'
 
         function initSBClient(){
             if(sbClient)return true;
@@ -311,6 +312,20 @@
                 if(payload&&payload.id){
                     lobbyPlayers[payload.id]={nick:payload.nick,role:payload.role,ts:Date.now()};
                     updateRoomPlayerList();
+                    // Late joiner: auto-navigate based on room phase
+                    if(!isRoomHost&&payload.phase&&payload.id!==myMPId){
+                        let fp=document.getElementById('frontPage');
+                        let ss=document.getElementById('startScreen');
+                        if(payload.phase==='select'&&fp.style.display!=='none'&&ss.style.display==='none'){
+                            // Host is on character select, navigate there
+                            fp.style.display='none';ss.style.display='flex';showMPReadyPanel();
+                        }else if(payload.phase==='playing'&&fp.style.display!=='none'){
+                            // Game already started, join directly
+                            isMP=true;hideMPReadyPanel();
+                            let isMobile='ontouchstart' in window||navigator.maxTouchPoints>0;
+                            startGame(isMobile?'touch':'keyboard');
+                        }
+                    }
                 }
             });
             mpChannel.on('broadcast',{event:'state'},({payload})=>{if(payload&&payload.id!==myMPId)handleRemoteState(payload);});
@@ -357,11 +372,11 @@
                     let nickEl=document.getElementById('nickInput');
                     let nick=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
                     lobbyPlayers[myMPId]={nick:nick,role:selectedRole,ts:Date.now()};
-                    mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole}});
+                    mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole,phase:mpRoomPhase}});
                     // Keep announcing every 2s so others see us
                     lobbyBroadcastInterval=setInterval(()=>{
                         if(!mpChannel)return;
-                        mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole}});
+                        mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole,phase:mpRoomPhase}});
                         // Clean up stale players (not seen in 6s)
                         let now=Date.now();
                         for(let id in lobbyPlayers){if(now-lobbyPlayers[id].ts>6000)delete lobbyPlayers[id];}
@@ -405,7 +420,7 @@
                 try{mpChannel.unsubscribe();}catch(e){}
                 mpChannel=null;
             }
-            isMP=false;isRoomHost=false;roomCode='';otherPlayers={};lobbyPlayers={};
+            isMP=false;isRoomHost=false;roomCode='';otherPlayers={};lobbyPlayers={};mpRoomPhase='lobby';
             let rl=document.getElementById('roomLobby');if(rl)rl.style.display='none';
             let fl=document.getElementById('fpLobby');if(fl)fl.style.display='none';
         }
@@ -2873,10 +2888,12 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(gameLoop){cancelAnimationFrame(gameLoop);gameLoop=null;}
             if(isMP){
                 // Go back to front page lobby (keep room connection)
+                mpRoomPhase='lobby';
                 startScreen.style.display='none';
                 document.getElementById('frontPage').style.display='flex';
                 document.getElementById('fpRoomSection').style.display='block';
                 document.getElementById('fpLobby').style.display='block';
+                hideMPReadyPanel();
                 updateRoomPlayerList();
             }else{
                 startScreen.style.display='none';
@@ -2906,7 +2923,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             if(mode==='touch'){document.body.classList.add('touch-mode');if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{});if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});}
             // If host starting MP, notify clients
             if(isRoomHost&&mpChannel){
-                isMP=true;
+                isMP=true;mpRoomPhase='playing';
                 if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
                 mpChannel.send({type:'broadcast',event:'game_start',payload:{roomCode:roomCode}});
             }
@@ -2941,6 +2958,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             document.getElementById('fpRoomSection').style.display='none';
         });
         document.getElementById('fpStartBtn').addEventListener('click',()=>{
+            mpRoomPhase='select';
             if(mpChannel){mpChannel.send({type:'broadcast',event:'go_to_select',payload:{}});}
             document.getElementById('frontPage').style.display='none';
             document.getElementById('startScreen').style.display='flex';
