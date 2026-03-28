@@ -311,6 +311,13 @@
             });
             mpChannel.on('broadcast',{event:'shared_xp'},({payload})=>{if(payload&&payload.id!==myMPId&&gameState===STATE_PLAYING){player.exp+=payload.value;}});
             mpChannel.on('broadcast',{event:'resurrect'},({payload})=>{handleResurrection(payload);});
+            mpChannel.on('broadcast',{event:'go_to_select'},()=>{
+                if(!isRoomHost){
+                    console.log('[MP] Go to character select');
+                    document.getElementById('frontPage').style.display='none';
+                    document.getElementById('startScreen').style.display='flex';
+                }
+            });
             mpChannel.on('broadcast',{event:'game_start'},({payload})=>{
                 if(!isRoomHost){
                     console.log('[MP] Game start received');
@@ -2867,10 +2874,11 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             document.getElementById('fpLobby').style.display='none';
         });
         document.getElementById('fpStartBtn').addEventListener('click',()=>{
-            // Go to character select, then start game from there
+            // Host tells everyone to go to character select
+            if(mpChannel){mpChannel.send({type:'broadcast',event:'go_to_select',payload:{}});}
+            if(lobbyBroadcastInterval){clearInterval(lobbyBroadcastInterval);lobbyBroadcastInterval=null;}
             document.getElementById('frontPage').style.display='none';
             document.getElementById('startScreen').style.display='flex';
-            // Host will start MP game when clicking keyboard/touch mode
         });
     })();</script>
 </body>
