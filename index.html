@@ -285,6 +285,8 @@
                 }
             });
             mpChannel.on('broadcast',{event:'state'},({payload})=>{if(payload&&payload.id!==myMPId)handleRemoteState(payload);});
+            mpChannel.on('broadcast',{event:'entities'},({payload})=>{if(payload)receiveEntities(payload);});
+            mpChannel.on('broadcast',{event:'remote_damage'},({payload})=>{if(payload)processRemoteDamage(payload);});
             mpChannel.on('broadcast',{event:'shared_xp'},({payload})=>{if(payload&&payload.id!==myMPId&&gameState===STATE_PLAYING){player.exp+=payload.value;}});
             mpChannel.on('broadcast',{event:'resurrect'},({payload})=>{handleResurrection(payload);});
             mpChannel.on('broadcast',{event:'game_start'},({payload})=>{
@@ -394,6 +396,10 @@
         const RES_CIRCLE_RADIUS=100; // circle size around ghost
         // Ghost state for dead player in MP
         let mpGhostX=0, mpGhostY=0, mpIsDead=false;
+        // Shared enemies: host broadcasts, clients receive
+        let mpEntityIdCounter=0;
+        let lastEntitySync=0;
+        const ENTITY_SYNC_RATE=150; // ms
 
         function updateResurrection(dt){
             if(!isMP||resCooldown>0||gameState===STATE_GAMEOVER||gameState!==STATE_PLAYING){
@@ -420,15 +426,68 @@
                     mpChannel.send({type:'broadcast',event:'resurrect',payload:{targetId:foundTarget,byId:myMPId,byNick:playerNickname}});
                     addFloatingText('\u{1F4AB} 复活了 '+(op?op.nick:'队友')+'!',player.x,player.y-50,'#44ff44');
                     screenShakeTimer=0.3;screenShakeIntensity=6;
+                    // AOE damage to enemies around resurrection area
+                    let resAoeDmg=player.damage*3;let resAoeR=RES_CIRCLE_RADIUS*1.5;
+                    let gx2=op?op.ghostX:player.x,gy2=op?op.ghostY:player.y;
+                    for(let ei=enemies.length-1;ei>=0;ei--){let e=enemies[ei];if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius){e.health-=resAoeDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(ei,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let ei=elites.length-1;ei>=0;ei--){let e=elites[ei];if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius){e.health-=resAoeDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(ei,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+                    for(let bs of bosses){if(Math.hypot(bs.x-gx2,bs.y-gy2)<resAoeR+bs.radius){bs.health-=resAoeDmg;}}
+                    spawnDeathParticles(gx2,gy2,RES_CIRCLE_RADIUS,'#44ff44',25);
                 }
             }else{
-                // Left the circle — progress slowly drains instead of resetting
-                resChanneling=false;resChannelTarget=null;
+                // Left the circle — progress slowly drains, but keep target so re-entering continues
+                resChanneling=false;
                 if(resChannelProgress>0)resChannelProgress=Math.max(0,resChannelProgress-dt*0.3);
             }
         }
 
         function getResChannelDodgeBonus(){return 0;}
+
+        // ====== SHARED ENEMIES SYSTEM ======
+        function isHostMP(){return isMP&&isRoomHost;}
+        function isClientMP(){return isMP&&!isRoomHost;}
+
+        function broadcastEntities(){
+            if(!isHostMP()||!mpChannel)return;
+            let now=Date.now();if(now-lastEntitySync<ENTITY_SYNC_RATE)return;lastEntitySync=now;
+            // Compress entity data
+            let eData=enemies.slice(0,50).map(e=>({eid:e.eid,x:Math.round(e.x),y:Math.round(e.y),r:Math.round(e.radius*10)/10,hp:Math.round(e.health*10)/10,mhp:Math.round(e.maxHealth*10)/10,spd:Math.round(e.speed),t:e.type,fr:e.frozen||0}));
+            let elData=elites.map(e=>({eid:e.eid,x:Math.round(e.x),y:Math.round(e.y),r:Math.round(e.radius*10)/10,hp:Math.round(e.health*10)/10,mhp:Math.round(e.maxHealth*10)/10,spd:Math.round(e.speed),af:e.affixes?e.affixes.map(a=>a.id):[],ash:Math.round((e.affixShield||0)*10)/10}));
+            let bData=bosses.map(b=>({eid:b.eid,x:Math.round(b.x),y:Math.round(b.y),r:Math.round(b.radius*10)/10,hp:Math.round(b.health*10)/10,mhp:Math.round(b.maxHealth*10)/10,bt:b.bossType,fr:b.frozen||0}));
+            let xpData=xpOrbs.slice(0,30).map(o=>({x:Math.round(o.x),y:Math.round(o.y),r:Math.round(o.radius*10)/10,v:o.value}));
+            let cData=chests.map(c=>({x:Math.round(c.x),y:Math.round(c.y),op:c.isOpen}));
+            mpChannel.send({type:'broadcast',event:'entities',payload:{e:eData,el:elData,b:bData,xp:xpData,ch:cData,kc:killCount,gt:Math.round(gameTime*10)/10}});
+        }
+
+        function receiveEntities(data){
+            if(!isClientMP())return;
+            // Replace local entity arrays with host data
+            enemies=data.e.map(e=>({eid:e.eid,x:e.x,y:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,type:e.t,isBoss:false,isElite:false,frozen:e.fr||0,attackTimer:0,shieldAngle:0,healTimer:0}));
+            elites=data.el.map(e=>{let afxObjs=(e.af||[]).map(aid=>ELITE_AFFIXES.find(a=>a.id===aid)).filter(Boolean);return{eid:e.eid,x:e.x,y:e.y,radius:e.r,health:e.hp,maxHealth:e.mhp,speed:e.spd,isElite:true,isBoss:false,affixes:afxObjs,affixShield:e.ash||0};});
+            bosses=data.b.map(b=>({eid:b.eid,x:b.x,y:b.y,radius:b.r,health:b.hp,maxHealth:b.mhp,isBoss:true,bossType:b.bt,frozen:b.fr||0,attackTimer:0,attackInterval:2,contactDamage:5,speed:30,chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:0,teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0}));
+            xpOrbs=data.xp.map(o=>({x:o.x,y:o.y,radius:o.r,value:o.v}));
+            chests=data.ch.map(c=>({x:c.x,y:c.y,radius:18,isOpen:c.op}));
+            killCount=data.kc||killCount;
+        }
+
+        function sendDamageToHost(eid,damage,isCrit,isElite,isBoss){
+            if(!isClientMP()||!mpChannel)return;
+            mpChannel.send({type:'broadcast',event:'remote_damage',payload:{eid:eid,dmg:damage,crit:isCrit,el:isElite,boss:isBoss,pid:myMPId}});
+        }
+
+        function processRemoteDamage(data){
+            if(!isHostMP())return;
+            // Find entity by eid and apply damage
+            if(data.boss){for(let i=bosses.length-1;i>=0;i--){let b=bosses[i];if(b.eid===data.eid){b.health-=data.dmg;if(data.crit&&hasRelic('freezeOnCrit'))b.frozen=Math.max(b.frozen||0,0.8);if(b.health<=0){spawnXpFromEnemy(b.x,b.y,b.radius,true);bosses.splice(i,1);killCount++;bossKillCount++;let ni=generateShopItems();shopItems=[ni[0]||null,ni[1]||null,ni[2]||null];shopRefreshCount=0;let role=ROLES[selectedRole];if(role&&role.skill&&skillLevel<MAX_SKILL_LEVEL){skillUpOptions=generateSkillUpOptions();gameState=STATE_SKILL_UP;}else{gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;}}break;}}}
+            else if(data.el){for(let i=elites.length-1;i>=0;i--){let e=elites[i];if(e.eid===data.eid){if(e.affixShield>0){e.affixShield-=data.dmg;if(e.affixShield<0){e.health+=e.affixShield;e.affixShield=0;}}else{e.health-=data.dmg;}if(data.crit&&hasRelic('freezeOnCrit'))e.frozen=Math.max(e.frozen||0,0.8);if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(i,1);killCount++;}break;}}}
+            else{for(let i=enemies.length-1;i>=0;i--){let e=enemies[i];if(e.eid===data.eid){e.health-=data.dmg;if(data.crit&&hasRelic('freezeOnCrit'))e.frozen=Math.max(e.frozen||0,0.8);if(e.health<=0){if(e.type==='splitter'){for(let s=0;s<3;s++){let sa=Math.random()*Math.PI*2;enemies.push({eid:++mpEntityIdCounter,x:e.x+Math.cos(sa)*15,y:e.y+Math.sin(sa)*15,radius:5,health:2,maxHealth:2,speed:e.speed*1.5,isBoss:false,isElite:false,type:'mini',attackTimer:0,shieldAngle:0,healTimer:0});}}spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(i,1);killCount++;}break;}}}
+        }
+
+        function getNearestPlayerPos(ex,ey){
+            let best={x:player.x,y:player.y},bestD=Math.hypot(ex-player.x,ey-player.y);
+            for(let id in otherPlayers){let op=otherPlayers[id];if(!op.alive)continue;let d=Math.hypot(ex-op.x,ey-op.y);if(d<bestD){bestD=d;best={x:op.x,y:op.y};}}
+            return best;
+        }
 
         function handleResurrection(data){
             if(data.targetId===myMPId&&gameState===STATE_GAMEOVER){
@@ -1182,7 +1241,7 @@ else if(type==='healer'){radius=clamp(radius*0.8,5,14);health*=0.8;speed*=0.5;}
 else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.2;}
 
             let angle=Math.random()*Math.PI*2,distance=450+Math.random()*300;
-            enemies.push({x:player.x+Math.cos(angle)*distance,y:player.y+Math.sin(angle)*distance,
+            enemies.push({eid:++mpEntityIdCounter,x:player.x+Math.cos(angle)*distance,y:player.y+Math.sin(angle)*distance,
                 radius,health,maxHealth:health,speed,isBoss:false,isElite:false,type:type,attackTimer:0,shieldAngle:0,healTimer:0});
         }
 
@@ -1195,7 +1254,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                     let afxs=rollEliteAffixes();
                     let shieldHp=0;
                     for(let af of afxs){if(af.id==='haste')spd*=1.8;if(af.id==='shielded')shieldHp=Math.floor(hp*0.3);}
-                    elites.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isElite:true,isBoss:false,affixes:afxs,affixShield:shieldHp});}
+                    elites.push({eid:++mpEntityIdCounter,x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:r,health:hp,maxHealth:hp,speed:spd,isElite:true,isBoss:false,affixes:afxs,affixShield:shieldHp});}
                 addFloatingText(`⚡ 精英出现 x${n}`,player.x,player.y-60,"#ffaa55");
             }
         }
@@ -1213,7 +1272,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
                     let tr=(35+Math.random()*15)*tbt.radiusMult,thp=Math.floor((80+player.level*30+difficultyTimer*2)*tbt.healthMult*bsc.healthMult);
                     let tspd=(30+player.level*1.5)*tbt.speedMult*bsc.speedMult,ta=Math.random()*Math.PI*2;
                     let tx=player.x+Math.cos(ta)*500,ty=player.y+Math.sin(ta)*500;
-                    bosses.push({x:tx,y:ty,radius:tr,health:thp,maxHealth:thp,speed:tspd,isBoss:true,bossType:twin,
+                    bosses.push({eid:++mpEntityIdCounter,x:tx,y:ty,radius:tr,health:thp,maxHealth:thp,speed:tspd,isBoss:true,bossType:twin,
                         attackTimer:0,attackInterval:tbt.attackInterval,contactDamage:tbt.contactDamage,
                         chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:tspd*3,
                         teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0});
@@ -1227,7 +1286,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             let r=(35+Math.random()*15)*bt.radiusMult,hp=Math.floor((80+player.level*30+difficultyTimer*2)*bt.healthMult*bsc.healthMult);
             let spd=(30+player.level*1.5)*bt.speedMult*bsc.speedMult,a=Math.random()*Math.PI*2;
             let x=player.x+Math.cos(a)*500,y=player.y+Math.sin(a)*500;
-            bosses.push({x,y,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:true,bossType:tk,
+            bosses.push({eid:++mpEntityIdCounter,x,y,radius:r,health:hp,maxHealth:hp,speed:spd,isBoss:true,bossType:tk,
                 attackTimer:0,attackInterval:bt.attackInterval,contactDamage:bt.contactDamage,
                 chargeTimer:0,isCharging:false,chargeDuration:0,chargeDx:0,chargeDy:0,chargeSpeed:spd*2,
                 teleportCooldown:0,attackPhase:0,summonCount:0,hasAbsorbed:false,armor:0,enraged:false,twinAlive:true,fireTrailTimer:0});
@@ -1628,8 +1687,10 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             }
             worldOffsetX=player.x-W/2;worldOffsetY=player.y-H/2;
 
-            shootBullet(nowS);difficultyTimer+=dt;if(gameMode!=='bossRush')spawnEnemy(nowS);spawnChest(nowS);if(gameMode!=='bossRush')spawnElite(nowS);
-            if(gameMode==='bossRush'){if(gameTime-lastBossSpawnTime>=55&&bossCountdown<=0){bossCountdown=BOSS_COUNTDOWN_TIME;addFloatingText(`⚠️ Boss ${BOSS_COUNTDOWN_TIME}秒后出现`,player.x,player.y-80,'#ff5555');}}else{checkBossCountdown(nowS);}
+            shootBullet(nowS);difficultyTimer+=dt;
+            if(!isClientMP()){if(gameMode!=='bossRush')spawnEnemy(nowS);spawnChest(nowS);if(gameMode!=='bossRush')spawnElite(nowS);}
+            if(isHostMP())broadcastEntities();
+            if(!isClientMP()){if(gameMode==='bossRush'){if(gameTime-lastBossSpawnTime>=55&&bossCountdown<=0){bossCountdown=BOSS_COUNTDOWN_TIME;addFloatingText(`⚠️ Boss ${BOSS_COUNTDOWN_TIME}秒后出现`,player.x,player.y-80,'#ff5555');}}else{checkBossCountdown(nowS);}}
             // Horde events
             hordeTimer+=dt;
             if(activeMutators.includes('pacifist')){player.pacifistTimer=(player.pacifistTimer||0)+dt;if(player.pacifistTimer>=240){addFloatingText('💀 时间到!',player.x,player.y-60,'#ff0000');damagePlayer(9999);}}
@@ -1653,8 +1714,10 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             }
             // Enemy movement (type-specific)
             for(let e of enemies){
+                if(isClientMP())break; // Clients don't run enemy AI
                 if((e.frozen||0)>0){e.frozen-=dt;continue;}
-                let dx=player.x-e.x,dy=player.y-e.y,dist=Math.hypot(dx,dy);
+                let tgt=isHostMP()?getNearestPlayerPos(e.x,e.y):{x:player.x,y:player.y};
+                let dx=tgt.x-e.x,dy=tgt.y-e.y,dist=Math.hypot(dx,dy);
                 if(e.type==='shooter'){
                     let pref=220;
                     if(dist>pref+30&&dist>0.01){let mv=e.speed*dt;e.x+=(dx/dist)*mv;e.y+=(dy/dist)*mv;}
@@ -1695,10 +1758,10 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
 }
             }
             // Elite movement
-            for(let e of elites){if((e.frozen||0)>0){e.frozen-=dt;continue;}let dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy);if(d>0.01){let mv=e.speed*dt;e.x+=(dx/d)*mv;e.y+=(dy/d)*mv;}}
+            if(!isClientMP()){for(let e of elites){if((e.frozen||0)>0){e.frozen-=dt;continue;}let tgt=isHostMP()?getNearestPlayerPos(e.x,e.y):{x:player.x,y:player.y};let dx=tgt.x-e.x,dy=tgt.y-e.y,d=Math.hypot(dx,dy);if(d>0.01){let mv=e.speed*dt;e.x+=(dx/d)*mv;e.y+=(dy/d)*mv;}}}
 
-            // Boss AI
-            for(let boss of bosses){
+            // Boss AI (host only)
+            if(!isClientMP()) for(let boss of bosses){
                 if((boss.frozen||0)>0){boss.frozen-=dt;continue;}
                 let dx=player.x-boss.x,dy=player.y-boss.y,dist=Math.hypot(dx,dy);
                 if(boss.bossType==='berserker'){
@@ -1894,6 +1957,23 @@ for(let i=recentDeaths.length-1;i>=0;i--){recentDeaths[i].timer-=dt;if(recentDea
                 if(!b.fromBoss&&hasRelic('missileLock')){let ne=findNearestEnemy();if(ne){let mdx=ne.x-b.x,mdy=ne.y-b.y,md=Math.hypot(mdx,mdy);if(md>0.01&&md<300){let turnStr=1.5*dt;b.vx+=mdx/md*turnStr*Math.hypot(b.vx,b.vy);b.vy+=mdy/md*turnStr*Math.hypot(b.vx,b.vy);let bs2=Math.hypot(b.vx,b.vy),target=player.bulletSpeed||(b.fromBoss?200:400);b.vx=b.vx/bs2*target;b.vy=b.vy/bs2*target;}}}
                 if(!b.fromBoss){
                     let hit=false;
+                    // Client in MP: send damage to host instead of applying locally
+                    if(isClientMP()){
+                        for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
+                            b.hitEnemies.add(e);sendDamageToHost(e.eid,b.damage,b.isCrit,false,false);
+                            spawnDeathParticles(b.x,b.y,3,'#ffffff',3);showDmg(e,b.damage,b.isCrit);
+                            if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
+                            b.hitEnemies.add(e);sendDamageToHost(e.eid,b.damage,b.isCrit,true,false);
+                            spawnDeathParticles(b.x,b.y,3,'#ffffff',3);showDmg(e,b.damage,b.isCrit);
+                            if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        if(!hit)for(let j=bosses.length-1;j>=0;j--){let bs=bosses[j];if(b.hitEnemies.has(bs))continue;if(Math.hypot(b.x-bs.x,b.y-bs.y)<b.radius+bs.radius){
+                            b.hitEnemies.add(bs);sendDamageToHost(bs.eid,b.damage,b.isCrit,false,true);
+                            spawnDeathParticles(b.x,b.y,5,'#ff88ff',5);showDmg(bs,b.damage,b.isCrit);
+                            if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
+                        if(hit){bullets.splice(i,1);continue;}
+                    }else{
+                    // Host or solo: normal damage processing
                     for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
 if(e.type==='teleporter'&&(e.teleportInvuln||0)>0){b.hitEnemies.add(e);continue;}
 if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAngle+Math.PI*3)%(Math.PI*2))-Math.PI);if(da<Math.PI/4){addFloatingText('🛡',e.x,e.y-15,'#8888cc');b.hitEnemies.add(e);continue;}}
@@ -1974,6 +2054,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                             else if(relicDropPending){triggerRelicSelection();}
                             else{gameState=activeMutators.includes('noShop')?STATE_PLAYING:STATE_SHOP;}}if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(hit){bullets.splice(i,1);continue;}
+                    } // end host/solo else block
                 }else{if(Math.hypot(b.x-player.x,b.y-player.y)<b.radius+player.radius){tryDodgeOrDamage(b.damage);if(b.slows)player.slowTimer=2.0;bullets.splice(i,1);continue;}}
             }
 
@@ -2276,9 +2357,21 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             // Game over
             if(gameState===STATE_GAMEOVER){
     if(isMP&&mpIsDead){
+        // Check if ALL players are dead
+        let anyAlive=false;for(let oid in otherPlayers){if(otherPlayers[oid].alive){anyAlive=true;break;}}
+        if(!anyAlive&&Object.keys(otherPlayers).length>0){
+            // Everyone is dead — show game over with exit option
+            ctx.fillStyle="#000000dd";ctx.fillRect(0,0,W,H);
+            ctx.textAlign="center";
+            ctx.font="bold 36px 'Courier New'";ctx.fillStyle="#e05a5a";ctx.fillText("\u{1F494} 全军覆没!",W/2,200);
+            ctx.font="22px monospace";ctx.fillStyle="#fadf9e";
+            ctx.fillText('\u{1F480} Lv'+player.level+' | \u{1F5E1}\uFE0F '+killCount+' kills | \u23F1\uFE0F '+Math.floor(gameTime)+'s',W/2,260);
+            ctx.font="20px monospace";ctx.fillStyle="#b5a87d";
+            ctx.fillText(controlMode==='touch'?"点击屏幕返回":"点击 [重来] 返回主页",W/2,320);
+            ctx.textAlign="left";
+        }else{
         // MP ghost mode: semi-transparent overlay, show ghost + "waiting" message
         ctx.fillStyle="rgba(0,0,20,0.4)";ctx.fillRect(0,0,W,H);
-        // Draw ghost at center of screen
         let ghostPulse=0.5+0.3*Math.sin(Date.now()/300);
         ctx.globalAlpha=ghostPulse;ctx.fillStyle='rgba(136,136,255,0.4)';
         ctx.beginPath();ctx.arc(W/2,H/2,PLAYER_RADIUS+6,0,Math.PI*2);ctx.fill();
@@ -2287,9 +2380,10 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
         ctx.font='bold 20px monospace';ctx.fillStyle='#aaaaff';
         ctx.fillText('\u{1F4AB} 等待队友复活...',W/2,H/2-40);
         ctx.font='14px monospace';ctx.fillStyle='#888';
-        ctx.fillText('WASD 移动灵魂 · 可以吸收经验球 (50%)',W/2,H/2+50);
+        ctx.fillText('WASD 移动灵魂 \u00B7 可以吸收经验球 (50%)',W/2,H/2+50);
         ctx.fillText('Lv'+player.level+' | EXP '+Math.floor(player.exp)+'/'+player.nextExp,W/2,H/2+72);
         ctx.textAlign='left';
+        }
     }else{
     // Solo game over: full stats screen
     ctx.fillStyle="#000000dd";ctx.fillRect(0,0,W,H);
