@@ -224,7 +224,7 @@
             {id:'splitting',name:'Splitting',icon:'\u{1F480}'},
             {id:'shielded',name:'Shielded',icon:'\u{1F6E1}\uFE0F'},
             {id:'haste',name:'Haste',icon:'\u26A1'},
-            {id:'thorny',name:'Thorny',icon:'\u{1F335}'},
+            // thorny removed
         ];
         const WEAPON_EVOLUTIONS={
             dot:{stat:'piercing',threshold:4,name:'Laser Beam',announce:'\u{1F4A0} Laser Beam!'},
@@ -2347,8 +2347,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                         let elDmg=b.damage;
                         // Elite affix: shielded
                         if(e.affixShield>0){let absorbed=Math.min(e.affixShield,elDmg);e.affixShield-=absorbed;elDmg-=absorbed;addFloatingText('\u{1F6E1}\uFE0F',e.x,e.y-15,'#8888ff');}
-                        // Elite affix: thorny
-                        if(e.affixes&&e.affixes.some(a=>a.id==='thorny')){damagePlayer(3);}
+                        // thorny affix removed
                         e.health-=elDmg;b.hitEnemies.add(e);if(b.marks)e.marked=true;showDmg(e,elDmg,b.isCrit);runStats.damageDealt+=elDmg;if(b.isCrit)runStats.totalCrits++;if(player.lifesteal>0)player.hp=Math.min(player.maxHp,player.hp+elDmg*player.lifesteal);
                         // Freeze on Crit relic
                         if(b.isCrit&&hasRelic('freezeOnCrit')){e.frozen=Math.max(e.frozen||0,0.8);}
