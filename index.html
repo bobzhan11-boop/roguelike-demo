@@ -388,7 +388,9 @@
                     // Keep announcing every 2s so others see us
                     lobbyBroadcastInterval=setInterval(()=>{
                         if(!mpChannel)return;
-                        mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:nick,role:selectedRole,phase:mpRoomPhase}});
+                        let freshNick=(nickEl&&nickEl.value.trim())?nickEl.value.trim():'Player';
+                        lobbyPlayers[myMPId]={nick:freshNick,role:selectedRole,ts:Date.now()};
+                        mpChannel.send({type:'broadcast',event:'lobby',payload:{id:myMPId,nick:freshNick,role:selectedRole,phase:mpRoomPhase}});
                         // Clean up stale players (not seen in 6s)
                         let now=Date.now();
                         for(let id in lobbyPlayers){if(now-lobbyPlayers[id].ts>6000)delete lobbyPlayers[id];}
@@ -420,7 +422,7 @@
             // Show start button when host + 1+ players
             if(isRoomHost){
                 let show=ids.length>=1?'inline-block':'none';
-                let sb1=document.getElementById('startMPBtn');if(sb1)sb1.style.display=show;
+                // startMPBtn removed from DOM — only fpStartBtn exists
                 let sb2=document.getElementById('fpStartBtn');if(sb2)sb2.style.display=show;
             }
         }
@@ -433,7 +435,7 @@
                 mpChannel=null;
             }
             isMP=false;isRoomHost=false;roomCode='';otherPlayers={};lobbyPlayers={};mpRoomPhase='lobby';
-            let rl=document.getElementById('roomLobby');if(rl)rl.style.display='none';
+            // roomLobby removed from DOM — only fpLobby exists
             let fl=document.getElementById('fpLobby');if(fl)fl.style.display='none';
         }
 
@@ -566,9 +568,15 @@
                     // AOE damage to enemies around resurrection area
                     let resAoeDmg=player.damage*3;let resAoeR=RES_CIRCLE_RADIUS*1.5;
                     let gx2=op?op.ghostX:player.x,gy2=op?op.ghostY:player.y;
+                    if(isClientMP()){
+                        for(let e of enemies){if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius)sendDamageToHost(e.eid,resAoeDmg,false,false,false);}
+                        for(let e of elites){if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius)sendDamageToHost(e.eid,resAoeDmg,false,true,false);}
+                        for(let bs of bosses){if(Math.hypot(bs.x-gx2,bs.y-gy2)<resAoeR+bs.radius)sendDamageToHost(bs.eid,resAoeDmg,false,false,true);}
+                    }else{
                     for(let ei=enemies.length-1;ei>=0;ei--){let e=enemies[ei];if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius){e.health-=resAoeDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(ei,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                     for(let ei=elites.length-1;ei>=0;ei--){let e=elites[ei];if(Math.hypot(e.x-gx2,e.y-gy2)<resAoeR+e.radius){e.health-=resAoeDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(ei,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
                     for(let bs of bosses){if(Math.hypot(bs.x-gx2,bs.y-gy2)<resAoeR+bs.radius){bs.health-=resAoeDmg;}}
+                    }
                     spawnDeathParticles(gx2,gy2,RES_CIRCLE_RADIUS,'#44ff44',25);
                 }
             }else{
@@ -639,19 +647,21 @@
             if(isHostMP())return;
             mpSharedLevel=data.level;mpSharedExp=data.exp;mpSharedNextExp=data.nextExp;
             player.level=data.level;player.exp=data.exp;player.nextExp=data.nextExp;
-            // Match host's options by name from the full upgrade pool
+            // B6: Dead players skip the upgrade entirely
+            if(mpIsDead){myUpgradeChosen=true;mpWaitingForUpgrade=true;return;}
+            // B3: Populate pool first, then match host's options by name
+            generateUpgradeOptions(); // ensures __fullPool is populated
             let fullPool=generateUpgradeOptions.__fullPool||[];
             let matched=[];
             for(let name of (data.opts||[])){
                 let found=fullPool.find(o=>o.name===name);
                 if(found)matched.push(found);
             }
-            // Fallback: if matching failed, generate random (shouldn't happen)
             if(matched.length<3)matched=generateUpgradeOptions();
             upgradeOptions=matched;
             mpUpgradeOptions=matched;mpUpgradeChoices={};
             mpUpgradeTimer=MP_UPGRADE_TIMEOUT;mpWaitingForUpgrade=true;myUpgradeChosen=false;
-            if(gameState===STATE_PLAYING||gameState===STATE_GAMEOVER){
+            if(gameState===STATE_PLAYING){
                 gameState=STATE_UPGRADE;
             }
         }
@@ -1887,7 +1897,7 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             if(envShrineTimer>=90){envShrineTimer=0;let a=Math.random()*Math.PI*2,d=200+Math.random()*400;
                 healingShrines.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:25,active:true});}
             // Lava pools after 10 min
-            if(gameTime>=600){envLavaTimer+=0; // already incremented
+            if(gameTime>=600){
                 if(envLavaTimer>=8&&lavaPools.length<5){envLavaTimer=0;let a=Math.random()*Math.PI*2,d=100+Math.random()*300;
                     lavaPools.push({x:player.x+Math.cos(a)*d,y:player.y+Math.sin(a)*d,radius:80,life:20,dmgTimer:0});}}
             // Speed portals every 120s
@@ -2900,8 +2910,8 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 for(let e of elites){if(e.tx!==undefined){e.x+=(e.tx-e.x)*Math.min(1,dt*12);e.y+=(e.ty-e.y)*Math.min(1,dt*12);}}
                 for(let b of bosses){if(b.tx!==undefined){b.x+=(b.tx-b.x)*Math.min(1,dt*10);b.y+=(b.ty-b.y)*Math.min(1,dt*10);}}
             }
-            // Host keeps enemies running when dead/shopping — but NOT during upgrade (game pauses for upgrade)
-            if(isHostMP()&&gameState!==STATE_PLAYING&&gameState!==STATE_PAUSED&&gameState!==STATE_UPGRADE){updateHostEntities(dt,now/1000);}
+            // Host keeps enemies running ONLY when dead — pause during upgrade/shop/relic/skillup
+            if(isHostMP()&&gameState===STATE_GAMEOVER){updateHostEntities(dt,now/1000);}
             // MP upgrade sync countdown
             if(isMP&&mpWaitingForUpgrade){mpUpgradeTimer-=dt;if(mpUpgradeTimer<=0){autoPickUpgrade();}}
             // MP ghost mode: move ghost, eat orbs, broadcast state
@@ -2998,7 +3008,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             }else{
                 // Client requests restart from host
                 mpChannel.send({type:'broadcast',event:'mp_restart_request',payload:{pid:myMPId}});
-                addFloatingText('已请求重新开始...',player.x||0,player.y||0-30,'#88ddff');
+                addFloatingText('已请求重新开始...',player.x||0,(player.y||0)-30,'#88ddff');
             }
         }
 
@@ -3041,10 +3051,6 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             document.getElementById('fpLobby').style.display='block';
         });
         document.getElementById('fpJoinBtn').addEventListener('click',()=>{
-            // Override input source for front page
-            let oldInput=document.getElementById('joinCodeInput');
-            let fpInput=document.getElementById('fpJoinInput');
-            if(oldInput)oldInput.value=fpInput.value;
             joinRoom();
             document.getElementById('fpLobby').style.display='block';
         });
