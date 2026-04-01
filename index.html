@@ -129,6 +129,7 @@
             <button class="mode-btn" id="keyboardModeBtn">⌨️ 键盘 + 鼠标<small>Keyboard + Mouse</small></button>
             <button class="mode-btn" id="touchModeBtn">📱 触屏控制<small>Touch Joystick</small></button>
             </div>
+            <div style="margin-top:12px"><button class="mode-btn" id="backToFrontBtn" style="background:#3a3a4a;border-bottom-color:#2a2a3a;min-width:140px">⬅️ 返回<small>Back to Menu</small></button></div>
         </div>
         <!-- MP Ready panel (shown only in multiplayer) -->
         <div id="mpReadyPanel" style="display:none;margin-top:12px;width:100%;max-width:500px;background:#1a1f2b;border:2px solid #6b4f3a;border-radius:12px;padding:12px;text-align:center">
@@ -3025,7 +3026,13 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
         document.getElementById('fpSoloBtn').addEventListener('click',()=>{
             isMP=false;document.getElementById('frontPage').style.display='none';
             document.getElementById('startScreen').style.display='flex';
-            hideMPReadyPanel(); // Ensure solo buttons are visible
+            hideMPReadyPanel();
+        });
+        document.getElementById('backToFrontBtn').addEventListener('click',()=>{
+            document.getElementById('startScreen').style.display='none';
+            document.getElementById('frontPage').style.display='flex';
+            document.getElementById('fpRoomSection').style.display='none';
+            document.getElementById('fpLobby').style.display='none';
         });
         document.getElementById('fpMultiBtn').addEventListener('click',()=>{
             document.getElementById('fpRoomSection').style.display='block';
