@@ -162,6 +162,7 @@
                 <span class="key-hint" id="interactHint">E 开启宝箱</span>
                 <span class="key-hint">Space 闪避</span>
                 <span class="key-hint">Q 技能</span>
+                <span class="key-hint">V 大招</span>
                 <span class="key-hint" id="resHint" style="display:none">R 复活队友</span>
                 <span class="key-hint" id="pauseHint">P 暂停</span>
                 <span class="key-hint" id="settingsHint">F 设置</span>
@@ -587,6 +588,54 @@
         }
 
         function getResChannelDodgeBonus(){return 0;}
+
+        // ====== EXTENDED COMBO MULTIPLIER ======
+        function getComboXPMult(){
+            let c=player.comboCount||0;
+            if(c>=50)return 4.0;if(c>=25)return 3.0;if(c>=10)return 2.0;if(c>=5)return 1.5;return 1;
+        }
+        function checkComboBanner(){
+            let c=player.comboCount||0;
+            if(c===10&&comboBannerTimer<=0){comboBanner='COMBO x10!';comboBannerTimer=1.5;}
+            else if(c===25&&comboBannerTimer<=0){comboBanner='UNSTOPPABLE!';comboBannerTimer=2.0;}
+            else if(c===50&&comboBannerTimer<=0){comboBanner='GODLIKE!';comboBannerTimer=2.5;}
+            else if(c===100&&comboBannerTimer<=0){comboBanner='LEGENDARY!';comboBannerTimer=3.0;}
+        }
+
+        // ====== KILL CHAIN EXPLOSION ======
+        function tryChainExplosion(x,y,maxHp){
+            if(Math.random()>=CHAIN_CHANCE)return;
+            let chainDmg=maxHp*CHAIN_DMG_MULT;
+            spawnDeathParticles(x,y,CHAIN_RADIUS,'#ff8844',15);
+            addFloatingText('\u{1F4A5}',x,y-20,'#ff8844');
+            if(isClientMP()){
+                for(let e of enemies){if(Math.hypot(e.x-x,e.y-y)<CHAIN_RADIUS+e.radius)sendDamageToHost(e.eid,chainDmg,false,false,false);}
+                for(let e of elites){if(Math.hypot(e.x-x,e.y-y)<CHAIN_RADIUS+e.radius)sendDamageToHost(e.eid,chainDmg,false,true,false);}
+            }else{
+                for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-x,e.y-y)<CHAIN_RADIUS+e.radius){
+                    e.health-=chainDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);let cx=e.x,cy=e.y,cmh=e.maxHealth;enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;tryChainExplosion(cx,cy,cmh);}}}
+                for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-x,e.y-y)<CHAIN_RADIUS+e.radius){
+                    e.health-=chainDmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;}}}
+            }
+        }
+
+        // ====== SCREEN-CLEAR ULTIMATE ======
+        function activateUltimate(){
+            if(ultimateMeter<ULTIMATE_MAX||gameState!==STATE_PLAYING)return;
+            ultimateMeter=0;ultimateFlash=0.4;
+            screenShakeTimer=0.5;screenShakeIntensity=12;
+            addFloatingText('\u{2622}\uFE0F ULTIMATE!',player.x,player.y-60,'#ffff44');
+            let ux=player.x,uy=player.y,udmg=player.damage*15;
+            if(isClientMP()){
+                for(let e of enemies){if(Math.hypot(e.x-ux,e.y-uy)<ULTIMATE_RANGE)sendDamageToHost(e.eid,udmg,false,false,false);}
+                for(let e of elites){if(Math.hypot(e.x-ux,e.y-uy)<ULTIMATE_RANGE)sendDamageToHost(e.eid,udmg,false,true,false);}
+                for(let bs of bosses){if(Math.hypot(bs.x-ux,bs.y-uy)<ULTIMATE_RANGE)sendDamageToHost(bs.eid,udmg,false,false,true);}
+            }else{
+                for(let j=enemies.length-1;j>=0;j--){let e=enemies[j];if(Math.hypot(e.x-ux,e.y-uy)<ULTIMATE_RANGE){e.health-=udmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;}}}
+                for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(Math.hypot(e.x-ux,e.y-uy)<ULTIMATE_RANGE){e.health-=udmg;if(e.health<=0){spawnXpFromEnemy(e.x,e.y,e.radius,false,true);elites.splice(j,1);killCount++;}}}
+                for(let bs of bosses){if(Math.hypot(bs.x-ux,bs.y-uy)<ULTIMATE_RANGE){bs.health-=udmg;}}
+            }
+        }
 
         // Host keeps running enemy AI even when not in STATE_PLAYING
         function updateHostEntities(dt,nowS){
@@ -1279,6 +1328,15 @@
         let orbitingDaggers=[];
         // Blade storm aura
         let bladeStormTimer=0;
+        // ====== ULTIMATE ABILITY ======
+        let ultimateMeter=0;
+        const ULTIMATE_MAX=150; // kills to fill
+        const ULTIMATE_RANGE=500; // screen range
+        let ultimateFlash=0; // visual timer
+        // ====== COMBO BANNERS ======
+        let comboBanner='';let comboBannerTimer=0;
+        // ====== KILL CHAIN ======
+        const CHAIN_CHANCE=0.10;const CHAIN_RADIUS=80;const CHAIN_DMG_MULT=0.5;
         let lastTimestamp=0,gameLoop=null;
         let spawnRate=0.9,difficultyTimer=0,lastChestSpawnTime=0;
         const CHEST_SPAWN_INTERVAL=30;
@@ -1486,7 +1544,7 @@
             relicChoices=[];relicDropPending=false;
             healingShrines=[];lavaPools=[];speedPortals=[];toxicFog={active:false,x:0,y:0,radius:2000};
             envShrineTimer=0;envLavaTimer=0;envPortalTimer=0;envToxicTriggered=false;
-            orbitingDaggers=[];bladeStormTimer=0;
+            orbitingDaggers=[];bladeStormTimer=0;ultimateMeter=0;ultimateFlash=0;comboBanner='';comboBannerTimer=0;
             // Apply mutators
             if(activeMutators.includes('glassCannon')){player.maxHp=Math.floor(player.maxHp*0.5);player.hp=player.maxHp;player.damage*=1.3;}
             if(activeMutators.includes('speedRun')){player.speedBonus+=3;}
@@ -1996,7 +2054,11 @@ else if(type==='teleporter'){radius=clamp(radius*0.6,4,10);health*=0.5;speed*=1.
             if(player.skillTimer>0)player.skillTimer-=dt;
             if(player.slowTimer>0)player.slowTimer-=dt;
             if(player.skillActive){player.skillActive.timer-=dt;if(player.skillActive.timer<=0)player.skillActive=null;}
-            if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboCount>runStats.highestCombo)runStats.highestCombo=player.comboCount;if(player.comboTimer<=0)player.comboCount=0;}
+            if(player.comboTimer>0){player.comboTimer-=dt;if(player.comboCount>runStats.highestCombo)runStats.highestCombo=player.comboCount;checkComboBanner();if(player.comboTimer<=0)player.comboCount=0;}
+            if(comboBannerTimer>0)comboBannerTimer-=dt;
+            // Ultimate meter charges from killCount
+            ultimateMeter=Math.min(ULTIMATE_MAX,killCount);
+            if(ultimateFlash>0)ultimateFlash-=dt;
             // Sword energy projectile (warrior)
             if((ROLES[selectedRole]||ROLES.dot).weapon==='sword'){
                 player.swordEnergyTimer=(player.swordEnergyTimer||0)+dt;
@@ -2347,11 +2409,10 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
                             if(e.marked){friendlyGhosts.push({x:e.x,y:e.y,timer:5,shootTimer:0});recentDeaths.push({x:e.x,y:e.y,timer:5});}
                             // Chain Lightning relic
                             if(hasRelic('chainLightning'))chainLightningEffect(e.x,e.y,b.damage);
-                            // Gold Rain relic
+                            tryChainExplosion(e.x,e.y,e.maxHealth);
                             if(hasRelic('goldRain')){let gr=2+player.level;player.gold+=gr;runStats.goldEarned+=gr;}
-                            // Soul Reaper evolution
                             if(player.evolved&&player.evolvedWeapon==='Soul Reaper'){friendlyGhosts.push({x:e.x,y:e.y,timer:6,shootTimer:0});}
-                            flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;
+                            flushDmg(e);spawnXpFromEnemy(e.x,e.y,e.radius);enemies.splice(j,1);killCount++;player.comboCount++;player.comboTimer=2;hitPause=Math.max(hitPause,b.isCrit?0.03:0);
                         }if(b.piercing<=0){hit=true;break;}else b.piercing--;}}
                     if(!hit)for(let j=elites.length-1;j>=0;j--){let e=elites[j];if(b.hitEnemies.has(e))continue;if(Math.hypot(b.x-e.x,b.y-e.y)<b.radius+e.radius){
                         let elDmg=b.damage;
@@ -2416,7 +2477,7 @@ if(e.type==='shielded'){let ba=Math.atan2(b.vy,b.vx),da=Math.abs(((ba-e.shieldAn
             let effMagnet=player.magnetRange;
             for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i],dx=player.x-o.x,dy=player.y-o.y,d=Math.hypot(dx,dy);
                 if(d<player.radius+o.radius){
-                    let mult=player.comboCount>=10?2:player.comboCount>=5?1.5:1;
+                    let mult=getComboXPMult();
                     if(hasRelic('xpFeast'))mult*=1.3;
                     let xpVal=Math.floor(o.value*mult);xpOrbs.splice(i,1);
                     if(isMP){
@@ -2648,11 +2709,56 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
             let extraStats=`速度:${Math.round(getFinalSpeed())} 闪避:${Math.round(getFinalDodge()*100)}%`;
             if(player.lifesteal>0)extraStats+=` 吸血:${(player.lifesteal*100).toFixed(1)}%`;
             ctx.fillText(extraStats,20,118);
-            // Combo indicator
+            // Enhanced combo indicator
             if(player.comboCount>=3){
-                let cCol=player.comboCount>=10?'#ff4444':player.comboCount>=5?'#ffaa44':'#ffdd88';
-                let cMult=player.comboCount>=10?'2x':player.comboCount>=5?'1.5x':'';
-                ctx.fillStyle=cCol;ctx.font='bold 16px monospace';ctx.fillText(`连击 x${player.comboCount} ${cMult}`,W/2-60,30);
+                let cc=player.comboCount;
+                let cCol=cc>=50?'#ff00ff':cc>=25?'#ff2222':cc>=10?'#ff6644':cc>=5?'#ffaa44':'#ffdd88';
+                let cMult=getComboXPMult();let mTxt=cMult>1?` ${cMult}x XP`:'';
+                let fontSize=cc>=50?24:cc>=25?20:cc>=10?18:16;
+                ctx.fillStyle=cCol;ctx.font=`bold ${fontSize}px monospace`;ctx.textAlign='center';
+                ctx.shadowColor=cCol;ctx.shadowBlur=cc>=10?15:0;
+                ctx.fillText(`\u{1F525} x${cc}${mTxt}`,W/2,30);
+                ctx.shadowBlur=0;ctx.textAlign='left';
+                // Screen edge glow for high combos
+                if(cc>=10){
+                    let glowAlpha=cc>=50?0.15:cc>=25?0.10:0.05;
+                    let glowCol=cc>=50?'255,0,255':cc>=25?'255,50,0':'255,150,0';
+                    let grd=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.7);
+                    grd.addColorStop(0,'rgba(0,0,0,0)');grd.addColorStop(1,`rgba(${glowCol},${glowAlpha})`);
+                    ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+                }
+            }
+            // Combo banner
+            if(comboBannerTimer>0){
+                let ba=Math.min(1,comboBannerTimer/0.3);
+                let bSize=40+10*Math.sin(Date.now()/100);
+                ctx.globalAlpha=ba;ctx.font=`bold ${bSize}px 'Courier New'`;ctx.textAlign='center';
+                ctx.fillStyle='#ffd966';ctx.shadowColor='#ffaa00';ctx.shadowBlur=20;
+                ctx.fillText(comboBanner,W/2,H/2-80);
+                ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.textAlign='left';
+            }
+            // Ultimate meter bar
+            let ultPct=ultimateMeter/ULTIMATE_MAX;
+            let ultX=W/2-60,ultY=H-15,ultW=120,ultH=8;
+            ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(ultX,ultY,ultW,ultH);
+            ctx.fillStyle=ultPct>=1?'#ffff44':'#666688';ctx.fillRect(ultX,ultY,ultW*ultPct,ultH);
+            ctx.strokeStyle=ultPct>=1?'#ffff44':'#444';ctx.lineWidth=1;ctx.strokeRect(ultX,ultY,ultW,ultH);
+            if(ultPct>=1){ctx.fillStyle='#ffff44';ctx.font='10px monospace';ctx.textAlign='center';ctx.fillText('V \u2622\uFE0F ULTIMATE',W/2,ultY-2);ctx.textAlign='left';}
+            // Ultimate flash
+            if(ultimateFlash>0){
+                let fAlpha=ultimateFlash/0.4;
+                ctx.fillStyle=`rgba(255,255,200,${fAlpha*0.4})`;ctx.fillRect(0,0,W,H);
+                // Expanding ring
+                let ringR=(1-fAlpha)*ULTIMATE_RANGE*(W/1600);
+                let sp2=w2s(player.x,player.y);
+                ctx.beginPath();ctx.arc(sp2.x,sp2.y,ringR,0,Math.PI*2);ctx.strokeStyle=`rgba(255,255,100,${fAlpha})`;ctx.lineWidth=4;ctx.stroke();
+            }
+            // Low HP vignette
+            if(player.hp>0&&player.hp<=player.maxHp*0.3&&gameState===STATE_PLAYING){
+                let hpAlpha=0.15+0.1*Math.sin(Date.now()/200);
+                let vig=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.25,W/2,H/2,Math.max(W,H)*0.65);
+                vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,`rgba(200,0,0,${hpAlpha})`);
+                ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
             }
             // Horde warning
             if(gameMode==='bossRush'){ctx.fillStyle='#ffd966';ctx.font='bold 14px monospace';ctx.fillText('🏆 BOSS RUSH',W/2-60,55);}
@@ -2965,6 +3071,7 @@ if(e.type==='teleporter'){let pulse=0.5+0.5*Math.sin(Date.now()/150);ctx.globalA
                 if(k===keyMap.pause){if(gameState===STATE_PLAYING)gameState=STATE_PAUSED;else if(gameState===STATE_PAUSED)gameState=STATE_PLAYING;e.preventDefault();}
                 else if(k===' '&&gameState===STATE_PLAYING){triggerDash();e.preventDefault();}
                 else if(k==='q'&&gameState===STATE_PLAYING){activateSkill();e.preventDefault();}
+                else if(k==='v'&&gameState===STATE_PLAYING){activateUltimate();e.preventDefault();}
                 // Resurrection is now automatic (stand in circle) - no R key needed
                 else if(gameState===STATE_RELIC){if(k==='1')applyRelic(0);if(k==='2')applyRelic(1);if(k==='3')applyRelic(2);e.preventDefault();}
                 else if(gameState===STATE_SKILL_UP){if(k==='1')applySkillUpgrade(0);if(k==='2')applySkillUpgrade(1);if(k==='3')applySkillUpgrade(2);e.preventDefault();}
